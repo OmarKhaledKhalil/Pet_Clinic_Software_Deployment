@@ -1,0 +1,15 @@
+#trigger: none
+
+#pool:
+#  vmImage: 'ubuntu-latest'
+
+#steps:
+#- task: TerraformInstaller@1
+#  inputs:
+#    terraformVersion: '1.6.6'
+
+#- task: PowerShell@2
+#  displayName: 'Terraform Apply & Ansible Configuration'
+#  inputs:
+#    filePath: 'scripts/cd.ps1'
+#    pwsh: true
