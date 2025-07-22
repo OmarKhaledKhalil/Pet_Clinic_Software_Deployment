@@ -1,0 +1,48 @@
+#---
+#- name: Disable swap
+#  command: swapoff -a
+
+#- name: Disable SELinux
+#  selinux:
+#    state: disabled
+
+#- name: Disable firewall
+#  service:
+#    name: firewalld
+#    state: stopped
+#    enabled: no
+
+#- name: Load necessary kernel modules
+#  shell: |
+#    modprobe overlay
+#    modprobe br_netfilter
+
+#- name: Add required sysctl params
+#  copy:
+#    dest: /etc/sysctl.d/kubernetes.conf
+#    content: |
+#      net.bridge.bridge-nf-call-ip6tables = 1
+#      net.bridge.bridge-nf-call-iptables = 1
+#      net.ipv4.ip_forward = 1
+
+#- name: Apply sysctl params
+#  command: sysctl --system
+
+#- name: Install packages
+#  yum:
+#    name:
+#      - curl
+#      - wget
+#      - vim
+#      - git
+#      - net-tools
+#      - unzip
+#      - tar
+#      - containerd
+#    state: present
+
+#- name: Enable and start containerd
+#  systemd:
+#    name: containerd
+#    enabled: yes
+#    state: started

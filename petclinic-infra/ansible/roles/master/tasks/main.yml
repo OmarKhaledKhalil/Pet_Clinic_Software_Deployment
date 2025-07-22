@@ -1,0 +1,33 @@
+#---
+#- name: Enable bridge-nf-call
+#  shell: sysctl net.bridge.bridge-nf-call-iptables=1
+
+#- name: Enable containerd
+#  systemd:
+#    name: containerd
+#    state: started
+#    enabled: true
+
+#- name: Initialize Kubernetes Master
+#  command: kubeadm init --pod-network-cidr=10.244.0.0/16
+#  register: kubeadm_init
+
+#- name: Set up kubeconfig for root
+#  command: "{{ item }}"
+#  with_items:
+#    - mkdir -p /root/.kube
+#    - cp -i /etc/kubernetes/admin.conf /root/.kube/config
+#    - chown root:root /root/.kube/config
+
+#- name: Install Flannel Network Plugin
+#  shell: |
+#    kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+
+#- name: Generate join command
+#  shell: kubeadm token create --print-join-command
+#  register: join_command
+
+#- name: Save join command to file
+#  copy:
+#    content: "{{ join_command.stdout }}"
+#    dest: /tmp/kube_join.sh

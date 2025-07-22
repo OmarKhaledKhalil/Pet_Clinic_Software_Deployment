@@ -1,0 +1,14 @@
+#---
+#- name: Enable containerd
+#  systemd:
+#    name: containerd
+#    state: started
+#    enabled: true
+
+#- name: Get join command from master node
+#  command: cat /tmp/kube_join.sh
+#  register: join_command
+#  delegate_to: master
+
+#- name: Join worker to the Kubernetes cluster
+#  command: "{{ join_command.stdout }}"
