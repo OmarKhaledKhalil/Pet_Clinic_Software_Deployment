@@ -9,7 +9,7 @@
 #variables:
 #  TF_VAR_owner1: 'Omar Khaled'
 #  TF_VAR_owner2: 'Salma Walid'
-#  TF_VAR_owner3: 'Mariam Mohsen'
+#  TF_VAR_owner3: 'Mariam Hesham'
 #  tf_version: '1.6.6'
 
 #steps:
