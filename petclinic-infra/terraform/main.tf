@@ -102,6 +102,7 @@
 # }
 
 # resource "aws_instance" "worker" {
+#   count                       = var.worker_count
 #   ami                         = var.ami_id
 #   instance_type               = var.worker_instance_type
 #   key_name                    = var.key_pair
@@ -112,7 +113,7 @@
 #   tags = merge(
 #     var.common_tags,
 #     {
-#       Name = "k8s-worker ${var.name_suffix}"
+#       Name = "k8s-worker-${count.index + 1} ${var.name_suffix}"
 #       Role = "worker"
 #     }
 #   )

@@ -51,6 +51,12 @@
 #   default     = "t2.medium"
 # }
 
+# variable "worker_count" {
+#   description = "Number of worker nodes to deploy"
+#   type        = number
+#   default     = 2
+# }
+
 # variable "ci_host_ip" {
 #   description = "Public IP of the CI/CD system that should have SSH/API access"
 #   type        = string
