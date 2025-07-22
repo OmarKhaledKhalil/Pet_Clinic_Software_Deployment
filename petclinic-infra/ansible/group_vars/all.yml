@@ -1,1 +1,42 @@
-#ansible_user: ec2-user   # Default user to SSH into EC2 instances
+# Common variables for all Ansible hosts
+
+# SSH settings
+ansible_user: ec2-user
+ansible_ssh_private_key_file: ~/.ssh/myssh-key.pem
+
+# Kubernetes configuration
+k8s_version: "1.21.0"
+pod_network_cidr: "10.244.0.0/16"  # Adjust based on the network plugin
+
+# Package dependencies
+common_packages:
+  - curl
+  - wget
+  - vim
+  - git
+  - net-tools
+  - unzip
+  - tar
+  - containerd
+
+# Security settings
+disable_selinux: true
+disable_swap: true
+enable_firewall: false
+
+# Networking settings
+sysctl_settings:
+  - { name: 'net.bridge.bridge-nf-call-ip6tables', value: 1 }
+  - { name: 'net.bridge.bridge-nf-call-iptables', value: 1 }
+  - { name: 'net.ipv4.ip_forward', value: 1 }
+
+# AWS specific settings
+aws_region: us-east-1
+vpc_cidr: "10.0.0.0/16"
+subnet_cidr: "10.0.1.0/24"
+
+# Instance types
+bastion_instance_type: t2.micro
+master_instance_type: t2.medium
+worker_instance_type: t2.medium
+worker_count: 2

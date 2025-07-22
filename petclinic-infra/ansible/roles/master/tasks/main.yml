@@ -1,41 +1,32 @@
-#---
-#- name: Enable bridge-nf-call
-#  shell: sysctl net.bridge.bridge-nf-call-iptables=1
-#  # Enable bridge network traffic to be processed by iptables, needed for Kubernetes networking.
+---
+- name: Master node setup                       # Define the play name for master nodes
+  hosts: master                                 # Apply tasks to master nodes
+  become: yes                                   # Run tasks with elevated privileges
+  tasks:
 
-#- name: Enable containerd
-#  systemd:
-#    name: containerd          # Manage the containerd service
-#    state: started            # Start containerd if it’s not running
-#    enabled: true             # Enable containerd to start on boot
-#  # containerd is the container runtime Kubernetes uses to run containers.
+    - name: Enable bridge networking            # Task to enable bridge networking
+      shell: sysctl net.bridge.bridge-nf-call-iptables=1  # Set sysctl for IPv4 packet filtering
 
-#- name: Initialize Kubernetes Master
-#  command: kubeadm init --pod-network-cidr=10.244.0.0/16
-#  register: kubeadm_init
-#  # Initialize the Kubernetes control plane on this master node,
-#  # specifying the pod network CIDR to match the Flannel network plugin.
+    - name: Initialize Kubernetes Master        # Task to set up the Kubernetes Master node
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16  # Initialize master with CIDR for pod network
+      register: kubeadm_init                    # Register result for later use
+      ignore_errors: yes                        # Ignore errors to allow further steps (useful for demos)
 
-#- name: Set up kubeconfig for root
-#  command: "{{ item }}"
-#  with_items:
-#    - mkdir -p /root/.kube                         # Create kubeconfig directory for root user
-#    - cp -i /etc/kubernetes/admin.conf /root/.kube/config  # Copy admin config to kubeconfig
-#    - chown root:root /root/.kube/config          # Set ownership of the kubeconfig file
-#  # This allows root user to use kubectl commands with admin privileges.
+    - name: Set up kubeconfig for root          # Task to configure kubectl for root user
+      shell: |                                  # Create .kube directory and copy config
+        mkdir -p /root/.kube
+        cp -i /etc/kubernetes/admin.conf /root/.kube/config
+        chown $(id -u):$(id -g) /root/.kube/config  # Set ownership to root user
 
-#- name: Install Flannel Network Plugin
-#  shell: |
-#    kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
-#  # Deploy Flannel as the pod network provider, enabling pod communication across nodes.
+    - name: Install Flannel Network Plugin      # Task to deploy Flannel for network overlay
+      shell: |
+        kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml  # Apply Flannel configuration
 
-#- name: Generate join command
-#  shell: kubeadm token create --print-join-command
-#  register: join_command
-#  # Generate the kubeadm join command with token for worker nodes to join the cluster.
+    - name: Generate join command               # Task to create a command for joining worker nodes
+      shell: kubeadm token create --print-join-command  # Generate token for joining nodes
+      register: join_command                    # Store the command output
 
-#- name: Save join command to file
-#  copy:
-#    content: "{{ join_command.stdout }}"
-#    dest: /tmp/kube_join.sh
-#  # Save the join command to a script file so worker nodes can fetch and execute it.
+    - name: Save join command to file           # Task to save the join command for later use
+      copy:
+        content: "{{ join_command.stdout }}"    # Write the command to a file
+        dest: /tmp/kube_join.sh                 # Destination file path

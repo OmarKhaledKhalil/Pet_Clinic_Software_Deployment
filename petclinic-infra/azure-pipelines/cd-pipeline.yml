@@ -1,15 +1,41 @@
-#trigger: none                              # Disable automatic triggering of this pipeline (manual or CI-triggered only)
+trigger:
+- main                                         # Trigger pipeline on changes to the 'main' branch
 
-#pool:                                     # Define the VM image for the pipeline agent
-#  vmImage: 'ubuntu-latest'                 # Use the latest Ubuntu image
+stages:
+- stage: Deploy                                # Define the deployment stage
+  jobs:
+  - job: DeployToAWS                           # Job for deploying to AWS
+    pool:
+      vmImage: 'ubuntu-latest'                 # Use the latest Ubuntu image for the job
+    steps:
 
-#steps:                                    # Define the sequence of pipeline tasks
-#- task: TerraformInstaller@1                # Install the specified version of Terraform
-#  inputs:
-#    terraformVersion: '1.6.6'                # Version of Terraform to install
+    - checkout: self                           # Checkout the code repository
+      persistCredentials: true                 # Keep credentials for subsequent tasks
 
-#- task: PowerShell@2                        # Run a PowerShell script for deployment and configuration
-#  displayName: 'Terraform Apply & Ansible Configuration'  # Friendly name in Azure DevOps UI
-#  inputs:
-#    filePath: 'scripts/cd.ps1'               # Path to the deployment PowerShell script
-#    pwsh: true                              # Use PowerShell Core (pwsh) instead of Windows PowerShell
+    - task: AzureCLI@2                         # Task to run Azure CLI commands
+      inputs:
+        azureSubscription: 'YourAzureSubscription'  # Specify your Azure subscription
+        scriptType: 'bash'                     # Use bash script
+        scriptLocation: 'inlineScript'         # Provide script inline
+        inlineScript: |
+          # Change directory to Terraform configuration files
+          cd terraform
+
+          # Initialize Terraform configuration
+          terraform init
+          # Apply Terraform changes automatically
+          terraform apply -auto-approve
+
+    - task: AzureCLI@2                         # Another Azure CLI task for Ansible
+      inputs:
+        azureSubscription: 'YourAzureSubscription'  # Specify your Azure subscription
+        scriptType: 'bash'                     # Use bash script
+        scriptLocation: 'inlineScript'         # Provide script inline
+        inlineScript: |
+          # Make the Ansible inventory generation script executable
+          chmod +x ansible/generate_inventory.sh
+          # Run the Ansible inventory generation script
+          ./ansible/generate_inventory.sh
+
+          # Execute the Ansible playbook using the generated inventory
+          ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml

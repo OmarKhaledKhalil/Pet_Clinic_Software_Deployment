@@ -1,19 +1,19 @@
-#---
-#- name: Enable containerd
-#  systemd:
-#    name: containerd          # Service name to manage
-#    state: started            # Ensure the service is running now
-#    enabled: true             # Enable service to start at boot
-#  # This makes sure containerd is up and running on the worker node,
-#  # as containerd is the container runtime required for Kubernetes.
+---
+- name: Worker node setup                      # Define the play name for worker nodes
+  hosts: worker                                # Apply tasks to worker nodes
+  become: yes                                  # Run tasks with elevated privileges
+  tasks:
 
-#- name: Get join command from master node
-#  command: cat /tmp/kube_join.sh  # Reads the join script saved on the master
-#  register: join_command            # Store the output in a variable 'join_command'
-#  delegate_to: master               # Run this command on the master node instead
-#  # We need the join command generated on the master to let workers join the cluster.
-#  # This fetches that command for execution on the worker.
+    - name: Enable containerd                  # Task to ensure container runtime is enabled
+      systemd:
+        name: containerd                       # Name of the service
+        state: started                         # Start the service
+        enabled: true                          # Enable service to start on boot
 
-#- name: Join worker to the Kubernetes cluster
-#  command: "{{ join_command.stdout }}"  # Execute the join command fetched from master
-#  # This executes the cluster join command on the worker, connecting it to the Kubernetes master.
+    - name: Fetch join command from master     # Task to retrieve the cluster join command
+      command: cat /tmp/kube_join.sh           # Read the join command from file
+      register: join_command                   # Store the command output
+      delegate_to: master                      # Execute this task on the master node
+
+    - name: Join Kubernetes cluster            # Task to join the worker node to the cluster
+      command: "{{ join_command.stdout }}"     # Run the join command retrieved from master

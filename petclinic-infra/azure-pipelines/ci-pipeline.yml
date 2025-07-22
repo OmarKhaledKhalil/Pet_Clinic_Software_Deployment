@@ -1,28 +1,46 @@
-#trigger:                                    # Defines which branches trigger this pipeline automatically
-#  branches:
-#    include:
-#      - main                               # Trigger pipeline only on changes to 'main' branch
+trigger:
+- main                                         # Trigger pipeline on changes to the 'main' branch
 
-#pool:                                       # Defines the VM image used for the pipeline agent
-#  vmImage: 'ubuntu-latest'                  # Use latest Ubuntu image for running tasks
+stages:
+- stage: Build                                 # Define the build stage
+  jobs:
+  - job: BuildAndTest                          # Job for building and testing
+    pool:
+      vmImage: 'windows-latest'                # Use the latest Windows image for the job
+    steps:
 
-#variables:                                  # Define pipeline variables for reuse
-#  TF_VAR_owner1: 'Omar Khaled'             # Terraform variable Owner1
-#  TF_VAR_owner2: 'Salma Walid'              # Terraform variable Owner2
-#  TF_VAR_owner3: 'Mariam Hesham'            # Terraform variable Owner3
-#  tf_version: '1.6.6'                       # Specify Terraform version to install
+    - checkout: self                           # Checkout the code repository
 
-#steps:                                     # Define the sequence of steps/tasks in the pipeline
-#- task: UsePythonVersion@0                   # Task to ensure Python 3.x is available (for scripts if needed)
-#  inputs:
-#    versionSpec: '3.x'
+    - task: NodeTool@0                         # Task to install Node.js
+      inputs:
+        versionSpec: '14.x'                    # Specify Node.js version 14.x
+      displayName: 'Install Node.js'           # Display name for the step
 
-#- task: TerraformInstaller@1                 # Task to install specific Terraform version
-#  inputs:
-#    terraformVersion: '$(tf_version)'        # Use the version from variable tf_version
+    - script: |
+        npm install                            # Install Node.js dependencies
+        npm run build                          # Build the application
+        npm test                               # Run tests
+      displayName: 'Build and Test'            # Display name for the script step
 
-#- task: PowerShell@2                         # Run PowerShell script to initialize and plan Terraform
-#  displayName: 'Terraform Init & Plan'       # Friendly name for this task in the pipeline UI
-#  inputs:
-#    filePath: 'scripts/ci.ps1'               # Path to the PowerShell script file
-#    pwsh: true                              # Use PowerShell Core (pwsh) instead of Windows PowerShell
+- stage: StaticCodeAnalysis                    # Define the static code analysis stage
+  jobs:
+  - job: SCA                                   # Job for static code analysis
+    pool:
+      vmImage: 'ubuntu-latest'                 # Use the latest Ubuntu image for the job
+    steps:
+
+    - task: SonarQubePrepare@4                 # Task to prepare for SonarQube analysis
+      inputs:
+        SonarQube: 'SonarQubeServiceConnection' # Service connection for SonarQube
+        projectKey: 'PetClinic'                # Unique project key
+        projectName: 'Pet Clinic'              # Name of the project
+        projectVersion: '1.0'                  # Version of the project
+
+    - script: |
+        npm install                            # Install Node.js dependencies
+        sonar-scanner                         # Run SonarQube scanner
+      displayName: 'Run SonarQube Analysis'    # Display name for the script step
+
+    - task: SonarQubePublish@4                 # Task to publish SonarQube results
+      inputs:
+        pollingTimeoutSec: '300'               # Polling timeout for results

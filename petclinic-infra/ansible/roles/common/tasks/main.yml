@@ -1,56 +1,62 @@
-#---
-#- name: Disable swap
-#  command: swapoff -a
-#  # Disable swap to meet Kubernetes requirements (swap must be off).
+---
+- name: Common configuration                 # Define the play name
+  hosts: all                                 # Apply tasks to all hosts
+  become: yes                                # Run tasks with elevated privileges
+  tasks:
 
-#- name: Disable SELinux
-#  selinux:
-#    state: disabled
-#  # Disable SELinux for Kubernetes compatibility.
+    - name: Disable swap                     # Task to turn off swap memory
+      command: swapoff -a                    # Execute the 'swapoff' command
 
-#- name: Disable firewall
-#  service:
-#    name: firewalld
-#    state: stopped
-#    enabled: no
-#  # Stop and disable firewalld to prevent interference with cluster networking.
+    - name: Ensure swap is disabled in fstab # Task to prevent swap from enabling on reboot
+      replace:
+        path: /etc/fstab                     # File where swap configuration is stored
+        regexp: '^\s*(.+?)\s+swap\s'         # Regular expression to find swap entries
+        replace: '# \1 swap '                # Comment out swap entries
 
-#- name: Load necessary kernel modules
-#  shell: |
-#    modprobe overlay
-#    modprobe br_netfilter
-#  # Load kernel modules required by containerd and Kubernetes networking.
+    - name: Disable SELinux                  # Task to disable SELinux
+      selinux:
+        state: disabled                      # Ensure SELinux is set to 'disabled' mode
 
-#- name: Add required sysctl params
-#  copy:
-#    dest: /etc/sysctl.d/kubernetes.conf
-#    content: |
-#      net.bridge.bridge-nf-call-ip6tables = 1
-#      net.bridge.bridge-nf-call-iptables = 1
-#      net.ipv4.ip_forward = 1
-#  # Set kernel parameters needed for Kubernetes networking and IP forwarding.
+    - name: Ensure firewalld is stopped and disabled # Task to stop and disable the firewall
+      service:
+        name: firewalld                      # Specify the firewall service
+        state: stopped                       # Ensure the service is stopped
+        enabled: no                          # Ensure the service does not start on boot
 
-#- name: Apply sysctl params
-#  command: sysctl --system
-#  # Reload sysctl settings to apply the above parameters.
+    - name: Load necessary kernel modules    # Task to load kernel modules needed by Kubernetes
+      modprobe:
+        name: "{{ item }}"                   # Specify the module name (loop variable)
+        state: present                       # Ensure module is loaded
+      loop:
+        - overlay                            # Module for filesystem overlay
+        - br_netfilter                       # Module for network filtering
 
-#- name: Install packages
-#  yum:
-#    name:
-#      - curl
-#      - wget
-#      - vim
-#      - git
-#      - net-tools
-#      - unzip
-#      - tar
-#      - containerd
-#    state: present
-#  # Install essential utilities and containerd runtime.
+    - name: Configure sysctl parameters      # Task to set kernel parameters
+      copy:
+        dest: /etc/sysctl.d/kubernetes.conf  # File to store configuration
+        content: |                           # Configuration content
+          net.bridge.bridge-nf-call-ip6tables = 1    # Enable IPv6 packet filtering
+          net.bridge.bridge-nf-call-iptables = 1     # Enable IPv4 packet filtering
+          net.ipv4.ip_forward = 1                    # Enable packet forwarding
 
-#- name: Enable and start containerd
-#  systemd:
-#    name: containerd
-#    enabled: yes
-#    state: started
-#  # Ensure containerd service is enabled and running.
+    - name: Apply sysctl parameters          # Task to apply the sysctl settings
+      command: sysctl --system               # Reload sysctl settings
+
+    - name: Install essential packages       # Task to install necessary packages
+      yum:
+        name:
+          - curl                             # Command line tool for data transfer
+          - wget                             # Network downloader
+          - vim                              # Text editor
+          - git                              # Version control system
+          - net-tools                        # Network management tools
+          - unzip                            # Archive extraction tool
+          - tar                              # Archive utility
+          - containerd                       # Container runtime
+        state: present                       # Ensure packages are installed
+
+    - name: Enable and start containerd      # Task to manage the containerd service
+      systemd:
+        name: containerd                     # Name of the service
+        enabled: yes                         # Enable service to start on boot
+        state: started                       # Ensure service is running
