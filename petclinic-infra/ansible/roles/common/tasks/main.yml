@@ -1,21 +1,25 @@
 #---
 #- name: Disable swap
 #  command: swapoff -a
+#  # Disable swap to meet Kubernetes requirements (swap must be off).
 
 #- name: Disable SELinux
 #  selinux:
 #    state: disabled
+#  # Disable SELinux for Kubernetes compatibility.
 
 #- name: Disable firewall
 #  service:
 #    name: firewalld
 #    state: stopped
 #    enabled: no
+#  # Stop and disable firewalld to prevent interference with cluster networking.
 
 #- name: Load necessary kernel modules
 #  shell: |
 #    modprobe overlay
 #    modprobe br_netfilter
+#  # Load kernel modules required by containerd and Kubernetes networking.
 
 #- name: Add required sysctl params
 #  copy:
@@ -24,9 +28,11 @@
 #      net.bridge.bridge-nf-call-ip6tables = 1
 #      net.bridge.bridge-nf-call-iptables = 1
 #      net.ipv4.ip_forward = 1
+#  # Set kernel parameters needed for Kubernetes networking and IP forwarding.
 
 #- name: Apply sysctl params
 #  command: sysctl --system
+#  # Reload sysctl settings to apply the above parameters.
 
 #- name: Install packages
 #  yum:
@@ -40,9 +46,11 @@
 #      - tar
 #      - containerd
 #    state: present
+#  # Install essential utilities and containerd runtime.
 
 #- name: Enable and start containerd
 #  systemd:
 #    name: containerd
 #    enabled: yes
 #    state: started
+#  # Ensure containerd service is enabled and running.

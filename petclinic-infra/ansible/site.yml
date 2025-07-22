@@ -1,18 +1,18 @@
-#---
-#- name: Common setup on all nodes
-#  hosts: all
-#  become: yes
-#  roles:
-#    - common
+# ---
+# - name: Common setup on all nodes                  # Define a play for all nodes (bastion, master, worker)
+#   hosts: all
+#   become: yes                                      # Run tasks with escalated privileges (sudo)
+#   roles:
+#     - common                                      # Apply common role (basic setup, dependencies, etc.)
 
-#- name: Kubernetes master setup
-#  hosts: master
-#  become: yes
-#  roles:
-#    - master
+# - name: Kubernetes master setup                    # Define a play for the Kubernetes master node only
+#   hosts: master
+#   become: yes
+#   roles:
+#     - master                                      # Apply master-specific role (kubeadm init, setup control plane)
 
-#- name: Kubernetes worker setup
-#  hosts: worker
-#  become: yes
-#  roles:
-#    - worker
+# - name: Kubernetes worker setup                    # Define a play for all worker nodes
+#   hosts: worker
+#   become: yes
+#   roles:
+#     - worker                                      # Apply worker-specific role (join cluster, kubelet setup)

@@ -1,28 +1,28 @@
-#trigger:
+#trigger:                                    # Defines which branches trigger this pipeline automatically
 #  branches:
 #    include:
-#      - main
+#      - main                               # Trigger pipeline only on changes to 'main' branch
 
-#pool:
-#  vmImage: 'ubuntu-latest'
+#pool:                                       # Defines the VM image used for the pipeline agent
+#  vmImage: 'ubuntu-latest'                  # Use latest Ubuntu image for running tasks
 
-#variables:
-#  TF_VAR_owner1: 'Omar Khaled'
-#  TF_VAR_owner2: 'Salma Walid'
-#  TF_VAR_owner3: 'Mariam Hesham'
-#  tf_version: '1.6.6'
+#variables:                                  # Define pipeline variables for reuse
+#  TF_VAR_owner1: 'Omar Khaled'             # Terraform variable Owner1
+#  TF_VAR_owner2: 'Salma Walid'              # Terraform variable Owner2
+#  TF_VAR_owner3: 'Mariam Hesham'            # Terraform variable Owner3
+#  tf_version: '1.6.6'                       # Specify Terraform version to install
 
-#steps:
-#- task: UsePythonVersion@0
+#steps:                                     # Define the sequence of steps/tasks in the pipeline
+#- task: UsePythonVersion@0                   # Task to ensure Python 3.x is available (for scripts if needed)
 #  inputs:
 #    versionSpec: '3.x'
 
-#- task: TerraformInstaller@1
+#- task: TerraformInstaller@1                 # Task to install specific Terraform version
 #  inputs:
-#    terraformVersion: '$(tf_version)'
+#    terraformVersion: '$(tf_version)'        # Use the version from variable tf_version
 
-#- task: PowerShell@2
-#  displayName: 'Terraform Init & Plan'
+#- task: PowerShell@2                         # Run PowerShell script to initialize and plan Terraform
+#  displayName: 'Terraform Init & Plan'       # Friendly name for this task in the pipeline UI
 #  inputs:
-#    filePath: 'scripts/ci.ps1'
-#    pwsh: true
+#    filePath: 'scripts/ci.ps1'               # Path to the PowerShell script file
+#    pwsh: true                              # Use PowerShell Core (pwsh) instead of Windows PowerShell
