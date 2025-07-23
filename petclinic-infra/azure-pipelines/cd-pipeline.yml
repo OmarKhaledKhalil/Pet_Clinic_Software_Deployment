@@ -15,6 +15,11 @@ stages:
       persistCredentials: true  # Keep credentials for subsequent tasks
 
     - script: |
+        # Export AWS credentials from the variables
+        export AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID)
+        export AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY)
+        export AWS_SESSION_TOKEN=$(AWS_SESSION_TOKEN)
+
         # Change directory to Terraform configuration files
         cd terraform
 
@@ -25,6 +30,11 @@ stages:
       displayName: 'Run Terraform'
 
     - script: |
+        # Export AWS credentials from the variables
+        export AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID)
+        export AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY)
+        export AWS_SESSION_TOKEN=$(AWS_SESSION_TOKEN)
+
         # Make the Ansible inventory generation script executable
         chmod +x ansible/generate_inventory.sh
         # Run the Ansible inventory generation script
