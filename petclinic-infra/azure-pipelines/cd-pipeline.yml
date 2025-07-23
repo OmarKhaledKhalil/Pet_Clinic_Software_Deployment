@@ -11,18 +11,12 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'  # Use the latest Ubuntu image for the job
     steps:
-
     - checkout: self  # Checkout the code repository
       persistCredentials: true  # Keep credentials for subsequent tasks
 
-    - task: AzureCLI@2                         # Task to run Azure CLI commands
-      inputs:
-        #azureSubscription: 'YourAzureSubscription'  # Specify your Azure subscription
-        scriptType: 'bash'                     # Use bash script
-        scriptLocation: 'inlineScript'         # Provide script inline
-        inlineScript: |
-          # Change directory to Terraform configuration files
-          cd terraform
+    - script: |
+        # Change directory to Terraform configuration files
+        cd terraform
 
         # Initialize Terraform configuration
         terraform init
