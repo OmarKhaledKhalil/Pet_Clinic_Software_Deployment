@@ -1,6 +1,9 @@
 trigger:
 - main                                         # Trigger pipeline on changes to the 'main' branch
 
+variables:
+  - group: AWS_Temporary_Credentials  # Group of variables for AWS temporary credentials.
+
 stages:
 - stage: Build                                 # Define the build stage
   jobs:
