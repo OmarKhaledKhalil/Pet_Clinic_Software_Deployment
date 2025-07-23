@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-host
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app-host
+  template:
+    metadata:
+      labels:
+        app: app-host
+    spec:
+      containers:
+      - name: app-container
+        image: myappimage:latest
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+spec:
+  selector:
+    app: app-host
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
