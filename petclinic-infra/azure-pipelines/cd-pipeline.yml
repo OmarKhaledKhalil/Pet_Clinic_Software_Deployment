@@ -1,45 +1,60 @@
 trigger:
-- main  # Trigger pipeline on changes to the 'main' branch
+- main
 
 variables:
-  - group: AWS_Temporary_Credentials  # Group of variables for AWS temporary credentials.
+  - group: AWS_Temporary_Credentials
 
 stages:
-- stage: Deploy  # Define the deployment stage
+- stage: Deploy
   jobs:
-  - job: DeployToAWS  # Job for deploying to AWS
+  - job: DeployToAWS
     pool:
-      vmImage: 'ubuntu-latest'  # Use the latest Ubuntu image for the job
+      vmImage: 'windows-latest'
     steps:
-    - checkout: self  # Checkout the code repository
-      persistCredentials: true  # Keep credentials for subsequent tasks
+    - checkout: self
+      persistCredentials: true
 
-    - script: |
-        # Export AWS credentials from the variables
-        export AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID)
-        export AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY)
-        export AWS_SESSION_TOKEN=$(AWS_SESSION_TOKEN)
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Export AWS credentials
+          $env:AWS_ACCESS_KEY_ID = "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          $env:AWS_SECRET_ACCESS_KEY = "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          $env:AWS_SESSION_TOKEN = "${{ secrets.AWS_SESSION_TOKEN }}"
 
-        # Change directory to Terraform configuration files
-        cd terraform
-
-        # Initialize Terraform configuration
-        terraform init
-        # Apply Terraform changes automatically
-        terraform apply -auto-approve
+          # Navigate to Terraform directory
+          Set-Location -Path './terraform'
+          terraform init
+          terraform apply -auto-approve
       displayName: 'Run Terraform'
 
-    - script: |
-        # Export AWS credentials from the variables
-        export AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID)
-        export AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY)
-        export AWS_SESSION_TOKEN=$(AWS_SESSION_TOKEN)
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Navigate to Ansible directory
+          Set-Location -Path './ansible'
+          & ./generate_inventory.sh
 
-        # Make the Ansible inventory generation script executable
-        chmod +x ansible/generate_inventory.sh
-        # Run the Ansible inventory generation script
-        ./ansible/generate_inventory.sh
-
-        # Execute the Ansible playbook using the generated inventory
-        ansible-playbook -i ansible/inventory/hosts.ini ansible/site.yml
+          # Run Ansible playbook
+          ansible-playbook -i ./inventory/hosts.ini site.yml
       displayName: 'Run Ansible'
+
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Configure kubectl with kubeconfig
+          echo "$env:KUBECONFIG_FILE_CONTENT" | Out-File -FilePath "$(Build.SourcesDirectory)\kubeconfig"
+          $env:KUBECONFIG="$(Build.SourcesDirectory)\kubeconfig"
+
+          # Apply Kubernetes manifests
+          kubectl apply -f k8s-manifests/dev/app-deployment.yaml
+          kubectl apply -f k8s-manifests/dev/db-deployment.yaml
+          kubectl apply -f k8s-manifests/dev/memcache-deployment.yaml
+          kubectl apply -f k8s-manifests/dev/rabbitmq-deployment.yaml
+          kubectl apply -f k8s-manifests/dev/ingress.yaml
+      displayName: 'Deploy Kubernetes Manifests'
+      env:
+        KUBECONFIG_FILE_CONTENT: $(KUBECONFIG_FILE_CONTENT)

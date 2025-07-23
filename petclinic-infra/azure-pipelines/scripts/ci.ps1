@@ -1,18 +1,20 @@
-# Install Node.js
-Set-Location -Path './petclinic'                # Change directory to the Pet Clinic project
-npm install                                     # Install Node.js dependencies
+# Navigate to PetClinic directory
+Set-Location -Path './petclinic'
+
+# Install Node.js dependencies
+npm install
 
 # Run build and tests
-npm run build                                   # Build the application
-npm test                                        # Run application tests
+npm run build
+npm test
 
 # Prepare and run SonarQube analysis
-& sonar-scanner -Dsonar.projectKey="PetClinic" -Dsonar.sources="." # Run SonarQube scanner with project key
+& sonar-scanner -Dsonar.projectKey="PetClinic" -Dsonar.sources="."
 
 # Determine the outcome
-If ($LASTEXITCODE -ne 0) {                      # Check the exit code of the last command
-    Write-Host "CI process failed."             # Print message if CI process failed
-    Exit 1                                      # Exit with error code
+If ($LASTEXITCODE -ne 0) {
+    Write-Host "CI process failed."
+    Exit 1
 } else {
-    Write-Host "CI process succeeded."          # Print message if CI process succeeded
+    Write-Host "CI process succeeded."
 }

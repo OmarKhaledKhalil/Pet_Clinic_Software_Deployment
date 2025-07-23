@@ -1,49 +1,57 @@
 trigger:
-- main                                         # Trigger pipeline on changes to the 'main' branch
+- main
 
 variables:
-  - group: AWS_Temporary_Credentials  # Group of variables for AWS temporary credentials.
+  - group: AWS_Temporary_Credentials
 
 stages:
-- stage: Build                                 # Define the build stage
+- stage: Build
   jobs:
-  - job: BuildAndTest                          # Job for building and testing
+  - job: BuildAndTest
     pool:
-      vmImage: 'windows-latest'                # Use the latest Windows image for the job
+      vmImage: 'windows-latest'
     steps:
 
-    - checkout: self                           # Checkout the code repository
+    - checkout: self
 
-    - task: NodeTool@0                         # Task to install Node.js
+    - task: NodeTool@0
       inputs:
-        versionSpec: '14.x'                    # Specify Node.js version 14.x
-      displayName: 'Install Node.js'           # Display name for the step
+        versionSpec: '14.x'
+      displayName: 'Install Node.js'
 
-    - script: |
-        npm install                            # Install Node.js dependencies
-        npm run build                          # Build the application
-        npm test                               # Run tests
-      displayName: 'Build and Test'            # Display name for the script step
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          Set-Location -Path './petclinic'
+          npm install
+          npm run build
+          npm test
+      displayName: 'Build and Test'
 
-- stage: StaticCodeAnalysis                    # Define the static code analysis stage
+- stage: StaticCodeAnalysis
   jobs:
-  - job: SCA                                   # Job for static code analysis
+  - job: SCA
     pool:
-      vmImage: 'ubuntu-latest'                 # Use the latest Ubuntu image for the job
+      vmImage: 'ubuntu-latest'
     steps:
 
-    - task: SonarQubePrepare@4                 # Task to prepare for SonarQube analysis
+    - task: SonarQubePrepare@4
       inputs:
-        SonarQube: 'SonarQubeServiceConnection' # Service connection for SonarQube
-        projectKey: 'PetClinic'                # Unique project key
-        projectName: 'Pet Clinic'              # Name of the project
-        projectVersion: '1.0'                  # Version of the project
+        SonarQube: 'SonarQubeServiceConnection'
+        projectKey: 'PetClinic'
+        projectName: 'Pet Clinic'
+        projectVersion: '1.0'
 
-    - script: |
-        npm install                            # Install Node.js dependencies
-        sonar-scanner                         # Run SonarQube scanner
-      displayName: 'Run SonarQube Analysis'    # Display name for the script step
-
-    - task: SonarQubePublish@4                 # Task to publish SonarQube results
+    - task: PowerShell@2
       inputs:
-        pollingTimeoutSec: '300'               # Polling timeout for results
+        targetType: 'inline'
+        script: |
+          Set-Location -Path './petclinic'
+          npm install
+          sonar-scanner -Dsonar.projectKey="PetClinic" -Dsonar.sources="."
+      displayName: 'Run SonarQube Analysis'
+
+    - task: SonarQubePublish@4
+      inputs:
+        pollingTimeoutSec: '300'
