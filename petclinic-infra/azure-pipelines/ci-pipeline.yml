@@ -11,22 +11,36 @@ stages:
     pool:
       vmImage: 'windows-latest'
     steps:
-
-    - checkout: self
+    - checkout: self  # Pull the code from the repository
 
     - task: NodeTool@0
       inputs:
-        versionSpec: '14.x'
+        versionSpec: '14.x'  # Specify Node.js version
       displayName: 'Install Node.js'
 
     - task: PowerShell@2
       inputs:
         targetType: 'inline'
         script: |
-          Set-Location -Path './petclinic'
-          npm install
-          npm run build
-          npm test
+          try {
+            # Navigate to PetClinic project directory
+            Set-Location -Path './petclinic'
+
+            # Install Node.js dependencies
+            Write-Host "Installing Node.js dependencies..."
+            npm install
+
+            # Build the project
+            Write-Host "Building application..."
+            npm run build
+
+            # Run project tests
+            Write-Host "Running tests..."
+            npm test
+          } catch {
+            Write-Error "Build or test failed: $_"
+            throw $_
+          }
       displayName: 'Build and Test'
 
 - stage: StaticCodeAnalysis
@@ -38,7 +52,7 @@ stages:
 
     - task: SonarQubePrepare@4
       inputs:
-        SonarQube: 'SonarQubeServiceConnection'
+        SonarQube: 'SonarQubeServiceConnection'  # Connection to SonarQube server
         projectKey: 'PetClinic'
         projectName: 'Pet Clinic'
         projectVersion: '1.0'
@@ -47,11 +61,18 @@ stages:
       inputs:
         targetType: 'inline'
         script: |
-          Set-Location -Path './petclinic'
-          npm install
-          sonar-scanner -Dsonar.projectKey="PetClinic" -Dsonar.sources="."
+          try {
+            # Re-enter PetClinic directory
+            Set-Location -Path './petclinic'
+            Write-Host "Running SonarQube analysis..."
+            npm install
+            sonar-scanner -Dsonar.projectKey="PetClinic" -Dsonar.sources="."
+          } catch {
+            Write-Error "SonarQube analysis failed: $_"
+            throw $_
+          }
       displayName: 'Run SonarQube Analysis'
 
     - task: SonarQubePublish@4
       inputs:
-        pollingTimeoutSec: '300'
+        pollingTimeoutSec: '300'  # Maximum wait time for results
