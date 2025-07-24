@@ -17,6 +17,13 @@ spec:
         image: myappimage:latest
         ports:
         - containerPort: 80
+        env:
+        - name: DB_HOST
+          value: "db-service"  # Dependency on the database
+        - name: CACHE_HOST
+          value: "memcache-service"  # Dependency on the cache
+        - name: MESSAGE_BROKER_HOST
+          value: "rabbitmq-service"  # Dependency on RabbitMQ
 ---
 apiVersion: v1
 kind: Service
