@@ -26,12 +26,12 @@ try {
     $env:KUBECONFIG = "$PWD\kubeconfig"
 
     # Apply Kubernetes manifests for deployment
-    Write-Host "Applying Kubernetes manifests..."
-    kubectl apply -f ../k8s-manifests/dev/app-deployment.yaml
-    kubectl apply -f ../k8s-manifests/dev/db-deployment.yaml
-    kubectl apply -f ../k8s-manifests/dev/memcache-deployment.yaml
-    kubectl apply -f ../k8s-manifests/dev/rabbitmq-deployment.yaml
-    kubectl apply -f ../k8s-manifests/dev/ingress.yaml
+    Write-Host "Applying Kubernetes manifests in the correct order..."
+    kubectl apply -f ../k8s-manifests/dev/db-deployment.yaml  # Deploy DB first
+    kubectl apply -f ../k8s-manifests/dev/memcache-deployment.yaml  # Deploy Cache
+    kubectl apply -f ../k8s-manifests/dev/rabbitmq-deployment.yaml  # Deploy RabbitMQ
+    kubectl apply -f ../k8s-manifests/dev/ingress.yaml  # Deploy Ingress
+    kubectl apply -f ../k8s-manifests/dev/app-deployment.yaml  # Deploy Application
 } catch {
     Write-Error "Deployment script failed: $_"
     exit 1
