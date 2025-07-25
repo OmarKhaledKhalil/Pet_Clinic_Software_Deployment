@@ -13,7 +13,7 @@ pipeline {
                     env.JENKINS_IP = sh(script: "curl -s https://checkip.amazonaws.com", returnStdout: true).trim()
                     echo "🌍 Detected Jenkins IP: ${env.JENKINS_IP}"
                 }
-                git url: 'https://github.com/OmarKhaledKhalil/Pet_Clinic_Software_Deployment/new/master/petclinic-infra.git', branch: 'main'
+                git url: 'https://github.com/OmarKhaledKhalil/Pet_Clinic_Software_Deployment.git', branch: 'main'
             }
         }
 
