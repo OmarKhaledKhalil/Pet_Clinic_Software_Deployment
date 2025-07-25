@@ -10,6 +10,12 @@ variable "vpc_cidr_block" {
   default     = "10.0.0.0/16"
 }
 
+variable "jenkins_host_ip" {
+  description = "Public IP of Jenkins host for access/security groups"
+  type        = string
+}
+
+
 variable "subnet_cidr_block" {
   description = "CIDR block for the subnet"  # Defines the IP range for the subnet within the VPC.
   type        = string
