@@ -4,15 +4,12 @@ pipeline {
     environment {
         TF_DIR = "petclinic-infra/terraform"
         ANSIBLE_DIR = "petclinic-infra/ansible"
+        JENKINS_IP = "192.168.56.16"
     }
 
     stages {
-        stage('Checkout Code & Get Jenkins IP') {
+        stage('Checkout Code') {
             steps {
-                script {
-                    env.JENKINS_IP = sh(script: "curl -s https://checkip.amazonaws.com", returnStdout: true).trim()
-                    echo "🌍 Detected Jenkins IP: ${env.JENKINS_IP}"
-                }
                 git url: 'https://github.com/OmarKhaledKhalil/Pet_Clinic_Software_Deployment.git', branch: 'main'
             }
         }
