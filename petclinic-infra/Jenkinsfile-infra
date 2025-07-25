@@ -1,0 +1,90 @@
+pipeline {
+    agent any
+
+    environment {
+        TF_DIR = "petclinic-infra/terraform"
+        ANSIBLE_DIR = "petclinic-infra/ansible"
+    }
+
+    stages {
+        stage('Checkout Code & Get Jenkins IP') {
+            steps {
+                script {
+                    env.JENKINS_IP = sh(script: "curl -s https://checkip.amazonaws.com", returnStdout: true).trim()
+                    echo "🌍 Detected Jenkins IP: ${env.JENKINS_IP}"
+                }
+                git url: 'https://github.com/OmarKhaledKhalil/Pet_Clinic_Software_Deployment/new/master/petclinic-infra.git', branch: 'main'
+            }
+        }
+
+        stage('Terraform Init, Plan & Apply') {
+            steps {
+                dir("${TF_DIR}") {
+                    withCredentials([
+                        string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                        string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY'),
+                        string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
+                    ]) {
+                        sh '''
+                            echo "🔐 Exporting AWS credentials"
+                            export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                            export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                            export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN
+
+                            echo "🚀 Running Terraform with Jenkins IP: ${JENKINS_IP}"
+                            terraform init
+                            terraform plan -var="key_pair=jenkins-key" -var="jenkins_host_ip=${JENKINS_IP}"
+                            terraform apply -auto-approve -var="key_pair=jenkins-key" -var="jenkins_host_ip=${JENKINS_IP}"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Wait for EC2 Boot') {
+            steps {
+                echo "⏳ Waiting 120 seconds for EC2 instances to boot..."
+                sleep 120
+            }
+        }
+
+        stage('Generate Ansible Inventory') {
+            steps {
+                dir("${ANSIBLE_DIR}") {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh '''
+                            echo "🔧 Running inventory generation with SSH key: $SSH_KEY"
+                            ./generate_inventory.sh $SSH_KEY
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Run Ansible Playbook') {
+            steps {
+                dir("${ANSIBLE_DIR}") {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh '''
+                            echo "📂 Listing inventory contents:"
+                            cat inventory/hosts.ini
+
+                            echo "📡 Starting Ansible Playbook"
+                            chmod 400 $SSH_KEY
+                            ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
+                        '''
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Infrastructure and Kubernetes setup completed successfully."
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs for errors."
+        }
+    }
+}
