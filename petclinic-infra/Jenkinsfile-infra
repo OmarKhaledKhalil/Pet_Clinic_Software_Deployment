@@ -34,4 +34,60 @@ pipeline {
                                 -var="key_pair=jenkins-key" \
                                 -var="jenkins_host_ip=${JENKINS_IP}" \
                                 -var="ci_host_ip=${JENKINS_IP}"
-                            terraf
+                            terraform apply -auto-approve \
+                                -var="key_pair=jenkins-key" \
+                                -var="jenkins_host_ip=${JENKINS_IP}" \
+                                -var="ci_host_ip=${JENKINS_IP}"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Wait for EC2 Boot') {
+            steps {
+                echo "⏳ Waiting 120 seconds for EC2 instances to boot..."
+                sleep time: 120, unit: 'SECONDS'
+            }
+        }
+
+        stage('Generate Ansible Inventory') {
+            steps {
+                dir("${ANSIBLE_DIR}") {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh '''
+                            echo "🔧 Generating inventory"
+                            chmod 400 $SSH_KEY
+                            ./generate_inventory.sh $SSH_KEY
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Run Ansible Playbook') {
+            steps {
+                dir("${ANSIBLE_DIR}") {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh '''
+                            echo "📂 Showing inventory:"
+                            cat inventory/hosts.ini
+
+                            echo "📡 Running Ansible playbook"
+                            ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
+                        '''
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Infrastructure and Kubernetes setup completed successfully."
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs for details."
+        }
+    }
+}
