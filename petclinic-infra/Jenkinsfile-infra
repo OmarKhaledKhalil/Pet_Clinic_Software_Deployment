@@ -58,6 +58,7 @@ pipeline {
                         sh '''
                             echo "🔧 Generating inventory"
                             chmod 400 $SSH_KEY
+                            chmod +x generate_inventory.sh
                             ./generate_inventory.sh $SSH_KEY
                         '''
                     }
