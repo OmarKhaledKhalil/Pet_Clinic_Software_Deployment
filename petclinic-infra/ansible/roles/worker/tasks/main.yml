@@ -1,19 +1,14 @@
 ---
-- name: Worker node setup                      # Define the play name for worker nodes
-  hosts: worker                                # Apply tasks to worker nodes
-  become: yes                                  # Run tasks with elevated privileges
-  tasks:
+- name: Enable containerd
+  systemd:
+    name: containerd
+    state: started
+    enabled: true
 
-    - name: Enable containerd                  # Task to ensure container runtime is enabled
-      systemd:
-        name: containerd                       # Name of the service
-        state: started                         # Start the service
-        enabled: true                          # Enable service to start on boot
+- name: Fetch join command from master
+  command: cat /tmp/kube_join.sh
+  register: join_command
+  delegate_to: master
 
-    - name: Fetch join command from master     # Task to retrieve the cluster join command
-      command: cat /tmp/kube_join.sh           # Read the join command from file
-      register: join_command                   # Store the command output
-      delegate_to: master                      # Execute this task on the master node
-
-    - name: Join Kubernetes cluster            # Task to join the worker node to the cluster
-      command: "{{ join_command.stdout }}"     # Run the join command retrieved from master
+- name: Join Kubernetes cluster
+  command: "{{ join_command.stdout }}"
