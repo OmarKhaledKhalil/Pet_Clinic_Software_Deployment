@@ -1,32 +1,27 @@
 ---
-- name: Master node setup                       # Define the play name for master nodes
-  hosts: master                                 # Apply tasks to master nodes
-  become: yes                                   # Run tasks with elevated privileges
-  tasks:
+- name: Enable bridge networking            # Task to enable bridge networking
+  shell: sysctl net.bridge.bridge-nf-call-iptables=1  # Set sysctl for IPv4 packet filtering
 
-    - name: Enable bridge networking            # Task to enable bridge networking
-      shell: sysctl net.bridge.bridge-nf-call-iptables=1  # Set sysctl for IPv4 packet filtering
+- name: Initialize Kubernetes Master        # Task to set up the Kubernetes Master node
+  command: kubeadm init --pod-network-cidr=10.244.0.0/16  # Initialize master with CIDR for pod network
+  register: kubeadm_init                    # Register result for later use
+  ignore_errors: yes                        # Ignore errors to allow further steps (useful for demos)
 
-    - name: Initialize Kubernetes Master        # Task to set up the Kubernetes Master node
-      command: kubeadm init --pod-network-cidr=10.244.0.0/16  # Initialize master with CIDR for pod network
-      register: kubeadm_init                    # Register result for later use
-      ignore_errors: yes                        # Ignore errors to allow further steps (useful for demos)
+- name: Set up kubeconfig for root          # Task to configure kubectl for root user
+  shell: |                                  # Create .kube directory and copy config
+    mkdir -p /root/.kube
+    cp -i /etc/kubernetes/admin.conf /root/.kube/config
+    chown $(id -u):$(id -g) /root/.kube/config  # Set ownership to root user
 
-    - name: Set up kubeconfig for root          # Task to configure kubectl for root user
-      shell: |                                  # Create .kube directory and copy config
-        mkdir -p /root/.kube
-        cp -i /etc/kubernetes/admin.conf /root/.kube/config
-        chown $(id -u):$(id -g) /root/.kube/config  # Set ownership to root user
+- name: Install Flannel Network Plugin      # Task to deploy Flannel for network overlay
+  shell: |
+    kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml  # Apply Flannel configuration
 
-    - name: Install Flannel Network Plugin      # Task to deploy Flannel for network overlay
-      shell: |
-        kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml  # Apply Flannel configuration
+- name: Generate join command               # Task to create a command for joining worker nodes
+  shell: kubeadm token create --print-join-command  # Generate token for joining nodes
+  register: join_command                    # Store the command output
 
-    - name: Generate join command               # Task to create a command for joining worker nodes
-      shell: kubeadm token create --print-join-command  # Generate token for joining nodes
-      register: join_command                    # Store the command output
-
-    - name: Save join command to file           # Task to save the join command for later use
-      copy:
-        content: "{{ join_command.stdout }}"    # Write the command to a file
-        dest: /tmp/kube_join.sh                 # Destination file path
+- name: Save join command to file           # Task to save the join command for later use
+  copy:
+    content: "{{ join_command.stdout }}"    # Write the command to a file
+    dest: /tmp/kube_join.sh                 # Destination file path
