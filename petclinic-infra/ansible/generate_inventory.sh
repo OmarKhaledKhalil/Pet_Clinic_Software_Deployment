@@ -3,7 +3,7 @@
 # Paths
 TF_DIR=../terraform
 INVENTORY_DIR=./inventory
-KEY_PATH=~/.ssh/aws-devops-key.pem  # ✅ Adjusted to match AWS context
+KEY_PATH=/home/vagrant/Pet_Clinic_Software_Deployment/petclinic-infra/jenkins-key.pem  # ✅ Adjusted to match AWS context
 
 # Fetch Terraform outputs
 BASTION_IP=$(cd "$TF_DIR" && terraform output -raw bastion_public_ip)
