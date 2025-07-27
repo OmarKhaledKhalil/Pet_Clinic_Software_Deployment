@@ -13,6 +13,14 @@ resource "aws_vpc" "main" {
   )
 }
 
+resource "aws_internet_gateway" "main_igw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "main-igw-${var.name_suffix}"
+  }
+}
+
 resource "aws_subnet" "main" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidr_block
@@ -24,6 +32,24 @@ resource "aws_subnet" "main" {
       Name = "main-subnet ${var.name_suffix}"
     }
   )
+}
+
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main_igw.id
+  }
+
+  tags = {
+    Name = "public-rt-${var.name_suffix}"
+  }
+}
+
+resource "aws_route_table_association" "main_assoc" {
+  subnet_id      = aws_subnet.main.id
+  route_table_id = aws_route_table.public_rt.id
 }
 
 # Bastion Security Group - SSH only from Jenkins host public IP
