@@ -47,8 +47,8 @@ pipeline {
 
         stage('Wait for EC2 Boot') {
             steps {
-                echo "⏳ Waiting 100 seconds for EC2 instances to boot..."
-                sleep time: 100, unit: 'SECONDS'
+                echo "⏳ Waiting 0 seconds for EC2 instances to boot..."
+                sleep time: 0, unit: 'SECONDS'
             }
         }
 
@@ -57,10 +57,13 @@ pipeline {
                 dir("${ANSIBLE_DIR}") {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         sh '''
-                            echo "🔧 Generating inventory"
+                            KEY_PATH="$WORKSPACE/jenkins-key.pem"
                             chmod 400 $SSH_KEY
+                            cp $SSH_KEY "$KEY_PATH"
                             chmod +x generate_inventory.sh
-                            ./generate_inventory.sh $SSH_KEY
+                            ./generate_inventory.sh "$KEY_PATH"
+                            echo "Generated inventory:"
+                            cat inventory/hosts.ini
                         '''
                     }
                 }
@@ -72,27 +75,17 @@ pipeline {
                 dir("${ANSIBLE_DIR}") {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         sh '''
-                            # Use $WORKSPACE to guarantee write permissions!
-                            KEY_PATH="$(pwd)/jenkins-key.pem"
-
-                            echo "📂 Showing inventory:"
+                            KEY_PATH="$WORKSPACE/jenkins-key.pem"
+                            echo "📂 Checking key file and inventory:"
+                            ls -l "$KEY_PATH"
                             cat inventory/hosts.ini
-
-                            cp $SSH_KEY "$KEY_PATH"
-                            chmod 400 "$KEY_PATH"
 
                             echo "📡 Starting SSH agent and adding key"
                             eval "$(ssh-agent -s)"
                             ssh-add "$KEY_PATH"
 
                             export SSH_AUTH_SOCK=$SSH_AUTH_SOCK
-                            echo "✅ SSH_AUTH_SOCK available as: $SSH_AUTH_SOCK"
-
-                            # Re-generate inventory for the correct key path
-                            chmod +x generate_inventory.sh
-                            ./generate_inventory.sh "$KEY_PATH"
-                            echo "📂 Inventory after re-generation:"
-                            cat inventory/hosts.ini
+                            echo "✅ SSH_AUTH_SOCK is: $SSH_AUTH_SOCK"
 
                             echo "📡 Running Ansible playbook"
                             ansible-playbook -i inventory/hosts.ini site.yml --private-key "$KEY_PATH" --forks 1
