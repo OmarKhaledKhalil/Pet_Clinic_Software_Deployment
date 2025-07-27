@@ -68,39 +68,39 @@ pipeline {
         }
 
         stage('Run Ansible Playbook') {
-    steps {
-        dir("${ANSIBLE_DIR}") {
-            withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                sh '''
-                    # Use $WORKSPACE to guarantee write permissions!
-                    KEY_PATH="$WORKSPACE/jenkins-key.pem"
+            steps {
+                dir("${ANSIBLE_DIR}") {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh '''
+                            # Use $WORKSPACE to guarantee write permissions!
+                            KEY_PATH="$WORKSPACE/jenkins-key.pem"
 
-                    echo "📂 Showing inventory:"
-                    cat inventory/hosts.ini
+                            echo "📂 Showing inventory:"
+                            cat inventory/hosts.ini
 
-                    cp $SSH_KEY "$KEY_PATH"
-                    chmod 400 "$KEY_PATH"
+                            cp $SSH_KEY "$KEY_PATH"
+                            chmod 400 "$KEY_PATH"
 
-                    echo "📡 Starting SSH agent and adding key"
-                    eval "$(ssh-agent -s)"
-                    ssh-add "$KEY_PATH"
+                            echo "📡 Starting SSH agent and adding key"
+                            eval "$(ssh-agent -s)"
+                            ssh-add "$KEY_PATH"
 
-                    export SSH_AUTH_SOCK=$SSH_AUTH_SOCK
-                    echo "✅ SSH_AUTH_SOCK available as: $SSH_AUTH_SOCK"
+                            export SSH_AUTH_SOCK=$SSH_AUTH_SOCK
+                            echo "✅ SSH_AUTH_SOCK available as: $SSH_AUTH_SOCK"
 
-                    # Re-generate inventory for the correct key path
-                    chmod +x generate_inventory.sh
-                    ./generate_inventory.sh "$KEY_PATH"
-                    echo "📂 Inventory after re-generation:"
-                    cat inventory/hosts.ini
+                            # Re-generate inventory for the correct key path
+                            chmod +x generate_inventory.sh
+                            ./generate_inventory.sh "$KEY_PATH"
+                            echo "📂 Inventory after re-generation:"
+                            cat inventory/hosts.ini
 
-                    echo "📡 Running Ansible playbook"
-                    ansible-playbook -i inventory/hosts.ini site.yml --private-key "$KEY_PATH" --forks 1
-                '''
+                            echo "📡 Running Ansible playbook"
+                            ansible-playbook -i inventory/hosts.ini site.yml --private-key "$KEY_PATH" --forks 1
+                        '''
+                    }
+                }
             }
         }
-    }
-}
     }
 
     post {
