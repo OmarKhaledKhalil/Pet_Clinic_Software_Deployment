@@ -3,7 +3,7 @@
 # Paths
 TF_DIR=../terraform
 INVENTORY_DIR=./inventory
-KEY_PATH=/home/vagrant/Pet_Clinic_Software_Deployment/petclinic-infra/jenkins-key.pem  # ✅ Adjusted to match AWS context
+KEY_PATH=$1   # 👈 Get this from the pipeline call (should be $SSH_KEY)
 
 # Fetch Terraform outputs
 BASTION_IP=$(cd "$TF_DIR" && terraform output -raw bastion_public_ip)
@@ -15,6 +15,7 @@ mkdir -p "$INVENTORY_DIR"
 
 # Create hosts.ini
 HOSTS_FILE="${INVENTORY_DIR}/hosts.ini"
+
 echo "[master]" > "$HOSTS_FILE"
 echo "$MASTER_IP ansible_ssh_common_args='-o ProxyCommand=\"ssh -i $KEY_PATH -W %h:%p ec2-user@$BASTION_IP\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
 
