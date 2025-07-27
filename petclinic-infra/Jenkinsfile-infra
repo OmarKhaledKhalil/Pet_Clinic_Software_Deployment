@@ -59,7 +59,6 @@ pipeline {
                             echo "🔧 Generating inventory"
                             chmod 400 $SSH_KEY
                             chmod +x generate_inventory.sh
-                            # Explicitly pass key path to your script, use $SSH_KEY inside script
                             ./generate_inventory.sh $SSH_KEY
                         '''
                     }
@@ -76,7 +75,6 @@ pipeline {
                             cat inventory/hosts.ini
 
                             echo "📡 Running Ansible playbook"
-                            # Make sure --private-key uses the injected file
                             ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
                         '''
                     }
