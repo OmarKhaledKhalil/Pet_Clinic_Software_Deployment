@@ -61,6 +61,24 @@ pipeline {
             }
         }
 
+        stage('📤 Copy SSH Key to Bastion') {
+            steps {
+                dir("${ANSIBLE_DIR}") {
+                    withCredentials([
+                        sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
+                    ]) {
+                        sh '''
+                            BASTION_IP=$(grep -A1 "\\[bastion\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
+
+                            echo "📤 Copying SSH key to bastion ($BASTION_IP)..."
+                            scp -o StrictHostKeyChecking=no -i $SSH_KEY $SSH_KEY ec2-user@$BASTION_IP:/home/ec2-user/jenkins-key.pem
+                            ssh -i $SSH_KEY ec2-user@$BASTION_IP "chmod 400 /home/ec2-user/jenkins-key.pem"
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('🚀 Run Ansible Playbook') {
             steps {
                 dir("${ANSIBLE_DIR}") {
@@ -82,10 +100,10 @@ pipeline {
                             ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo ✅ Connected to master'
 
                             echo "📡 Ansible ping check"
-                            ansible -i inventory/hosts.ini all -m ping --private-key $SSH_KEY
+                            ansible -i inventory/hosts.ini all -m ping
 
                             echo "🚀 Running playbook"
-                            ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
+                            ansible-playbook -i inventory/hosts.ini site.yml
                         '''
                     }
                 }
