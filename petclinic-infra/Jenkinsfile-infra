@@ -74,6 +74,10 @@ pipeline {
                             echo "📂 Showing inventory:"
                             cat inventory/hosts.ini
 
+                            echo "📡 Starting SSH agent and adding key"
+                            eval "$(ssh-agent -s)"
+                            ssh-add $SSH_KEY
+
                             echo "📡 Running Ansible playbook"
                             ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
                         '''
