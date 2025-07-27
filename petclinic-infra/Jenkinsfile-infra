@@ -73,7 +73,7 @@ pipeline {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         sh '''
                             # Use $WORKSPACE to guarantee write permissions!
-                            KEY_PATH="$WORKSPACE/jenkins-key.pem"
+                            KEY_PATH="$(pwd)/jenkins-key.pem"
 
                             echo "📂 Showing inventory:"
                             cat inventory/hosts.ini
