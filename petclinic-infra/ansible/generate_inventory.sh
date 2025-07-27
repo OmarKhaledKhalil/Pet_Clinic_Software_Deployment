@@ -1,46 +1,32 @@
 #!/bin/bash
 
-echo "🔧 Starting inventory generation..."
+# Usage: ./generate_inventory.sh /path/to/temp-ssh-key
 
-INVENTORY_FILE="inventory/hosts.ini"
-KEY_PATH="$1"
-echo "📌 SSH key path: $KEY_PATH"
+TF_DIR=../terraform
+INVENTORY_DIR=./inventory
+KEY_PATH=$1   # Gets passed as $SSH_KEY from Jenkins
 
-echo "📡 Fetching Terraform outputs..."
-BASTION_PUBLIC_IP=$(terraform -chdir=../terraform output -raw bastion_public_ip)
-MASTER_PRIVATE_IP=$(terraform -chdir=../terraform output -raw master_private_ip)
-WORKER_PRIVATE_IPS=$(terraform -chdir=../terraform output -json worker_private_ips | jq -r '.[]')
+# Fetch Terraform outputs
+BASTION_IP=$(cd "$TF_DIR" && terraform output -raw bastion_public_ip)
+MASTER_IP=$(cd "$TF_DIR" && terraform output -raw master_private_ip)
+WORKER_IPS=$(cd "$TF_DIR" && terraform output -json worker_private_ips | jq -r '.[]')
 
-echo "✅ BASTION_PUBLIC_IP: $BASTION_PUBLIC_IP"
-echo "✅ MASTER_PRIVATE_IP: $MASTER_PRIVATE_IP"
-echo "✅ WORKER_PRIVATE_IPS:"
-echo "$WORKER_PRIVATE_IPS"
+# Create inventory directory
+mkdir -p "$INVENTORY_DIR"
 
-echo "📁 Creating inventory directory..."
-mkdir -p inventory
+# Create hosts.ini
+HOSTS_FILE="${INVENTORY_DIR}/hosts.ini"
 
-echo "📝 Writing to inventory..."
-cat > "$INVENTORY_FILE" <<EOF
-[bastion]
-$BASTION_PUBLIC_IP
+echo "[master]" > "$HOSTS_FILE"
+echo "$MASTER_IP ansible_ssh_common_args='-o ProxyCommand=\"ssh -W %h:%p ec2-user@$BASTION_IP\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
 
-[master]
-$MASTER_PRIVATE_IP ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'
-
-[worker]
-EOF
-
-for ip in $WORKER_PRIVATE_IPS; do
-  echo "$ip ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'" >> "$INVENTORY_FILE"
+echo "" >> "$HOSTS_FILE"
+echo "[worker]" >> "$HOSTS_FILE"
+for ip in $WORKER_IPS; do
+  echo "$ip ansible_ssh_common_args='-o ProxyCommand=\"ssh -W %h:%p ec2-user@$BASTION_IP\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
 done
 
-cat >> "$INVENTORY_FILE" <<EOF
-
-[all:vars]
-ansible_user=ec2-user
-ansible_ssh_private_key_file=$KEY_PATH
-EOF
-
-echo "📄 Final generated inventory:"
-cat "$INVENTORY_FILE"
-echo "✅ Inventory generation completed."
+echo "" >> "$HOSTS_FILE"
+echo "[all:vars]" >> "$HOSTS_FILE"
+echo "ansible_user=ec2-user" >> "$HOSTS_FILE"
+# DO NOT include ansible_ssh_private_key_file! You're passing the key via --private-key in ansible-playbook
