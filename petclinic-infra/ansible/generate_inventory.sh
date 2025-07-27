@@ -2,30 +2,25 @@
 
 echo "🔧 Generating inventory"
 
-# Variables
 INVENTORY_FILE="inventory/hosts.ini"
-KEY_PATH="/home/vagrant/Pet_Clinic_Software_Deployment/petclinic-infra/jenkins-key.pem"
+KEY_PATH="$1"
 BASTION_PUBLIC_IP=$(terraform -chdir=../terraform output -raw bastion_public_ip)
 MASTER_PRIVATE_IP=$(terraform -chdir=../terraform output -raw master_private_ip)
 WORKER_PRIVATE_IPS=$(terraform -chdir=../terraform output -json worker_private_ips | jq -r '.[]')
 
-# Ensure inventory directory exists
 mkdir -p inventory
 
-# Start writing inventory file
 cat > "$INVENTORY_FILE" <<EOF
 [master]
-$MASTER_PRIVATE_IP ansible_ssh_common_args='-o ProxyCommand="ssh -i $KEY_PATH -W %h:%p ec2-user@$BASTION_PUBLIC_IP" -o StrictHostKeyChecking=no'
+$MASTER_PRIVATE_IP ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'
 
 [worker]
 EOF
 
-# Append each worker private IP
 for ip in $WORKER_PRIVATE_IPS; do
-  echo "$ip ansible_ssh_common_args='-o ProxyCommand=\"ssh -i $KEY_PATH -W %h:%p ec2-user@$BASTION_PUBLIC_IP\" -o StrictHostKeyChecking=no'" >> "$INVENTORY_FILE"
+  echo "$ip ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'" >> "$INVENTORY_FILE"
 done
 
-# Global variables
 cat >> "$INVENTORY_FILE" <<EOF
 
 [all:vars]
