@@ -4,7 +4,7 @@ pipeline {
     environment {
         TF_DIR = "petclinic-infra/terraform"
         ANSIBLE_DIR = "petclinic-infra/ansible"
-        JENKINS_IP = "192.168.56.16" // Your Vagrant machine IP
+        JENKINS_IP = "147.161.245.79" // Your Vagrant machine IP
     }
 
     stages {
