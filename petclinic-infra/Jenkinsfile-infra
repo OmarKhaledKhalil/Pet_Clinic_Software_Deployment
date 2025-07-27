@@ -97,7 +97,7 @@ pipeline {
                             ssh-keygen -R $BASTION_IP || true
 
                             echo "🔌 Testing SSH via bastion"
-                            ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo ✅ Connected to master'
+                            ssh -A -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@$MASTER_IP 'echo "✅ Connected to master"'
 
                             echo "📡 Ansible ping check"
                             ansible -i inventory/hosts.ini all -m ping
