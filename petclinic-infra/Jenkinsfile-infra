@@ -8,10 +8,9 @@ pipeline {
     }
 
     stages {
-
         stage('📥 Checkout Code') {
             steps {
-                echo "Checking out code from GitHub repository..."
+                echo "Checking out code..."
                 git url: 'https://github.com/OmarKhaledKhalil/Pet_Clinic_Software_Deployment.git', branch: 'master'
             }
         }
@@ -30,20 +29,9 @@ pipeline {
                             export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
                             export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN
 
-                            echo "📍 Directory: $(pwd)"
                             terraform init
-
-                            echo "📐 Running Terraform Plan"
-                            terraform plan \
-                                -var="key_pair=jenkins-key" \
-                                -var="jenkins_host_ip=${JENKINS_IP}" \
-                                -var="ci_host_ip=${JENKINS_IP}"
-
-                            echo "🚀 Applying Terraform Infrastructure"
-                            terraform apply -auto-approve \
-                                -var="key_pair=jenkins-key" \
-                                -var="jenkins_host_ip=${JENKINS_IP}" \
-                                -var="ci_host_ip=${JENKINS_IP}"
+                            terraform plan -var="key_pair=jenkins-key" -var="jenkins_host_ip=${JENKINS_IP}" -var="ci_host_ip=${JENKINS_IP}"
+                            terraform apply -auto-approve -var="key_pair=jenkins-key" -var="jenkins_host_ip=${JENKINS_IP}" -var="ci_host_ip=${JENKINS_IP}"
                         '''
                     }
                 }
@@ -52,7 +40,7 @@ pipeline {
 
         stage('⏳ Wait for EC2 Initialization') {
             steps {
-                echo "Waiting 100 seconds for EC2 instances to boot..."
+                echo "Waiting 100 seconds for EC2 instances to initialize..."
                 sleep time: 100, unit: 'SECONDS'
             }
         }
@@ -64,11 +52,8 @@ pipeline {
                         sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
                     ]) {
                         sh '''
-                            echo "🔐 SSH Key Path: $SSH_KEY"
                             chmod 400 $SSH_KEY
                             chmod +x generate_inventory.sh
-
-                            echo "⚙️ Generating inventory file..."
                             ./generate_inventory.sh $SSH_KEY
                         '''
                     }
@@ -83,32 +68,23 @@ pipeline {
                         sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
                     ]) {
                         sh '''
-                            echo "📂 Showing inventory file:"
+                            echo "📂 Inventory:"
                             cat inventory/hosts.ini
-
-                            echo "🔑 Fixing SSH key permissions"
-                            chmod 400 $SSH_KEY
 
                             MASTER_IP=$(grep -A1 "\\[master\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
                             BASTION_IP=$(grep -A1 "\\[bastion\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
 
-                            echo "🛠️ Preparing SSH environment for Jenkins user"
-                            mkdir -p ~/.ssh
-                            touch ~/.ssh/known_hosts
-                            chmod 700 ~/.ssh
-                            chmod 600 ~/.ssh/known_hosts
-
-                            echo "🧹 Cleaning known_hosts for $MASTER_IP and $BASTION_IP"
+                            echo "🧹 Cleaning known_hosts"
                             ssh-keygen -R $MASTER_IP || true
                             ssh-keygen -R $BASTION_IP || true
 
-                            echo "🔌 Testing SSH connection to master via bastion ($BASTION_IP → $MASTER_IP)..."
-                            ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo "✅ SSH to master successful"'
+                            echo "🔌 Testing SSH via bastion"
+                            ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo ✅ Connected to master'
 
-                            echo "📡 Testing Ansible ping"
-                            ansible -i inventory/hosts.ini all -m ping --private-key $SSH_KEY || echo "❌ Ansible ping failed"
+                            echo "📡 Ansible ping check"
+                            ansible -i inventory/hosts.ini all -m ping --private-key $SSH_KEY
 
-                            echo "🚀 Running main Ansible playbook..."
+                            echo "🚀 Running playbook"
                             ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
                         '''
                     }
@@ -119,10 +95,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline completed successfully!"
+            echo "✅ Deployment successful!"
         }
         failure {
-            echo "❌ Pipeline failed. Check logs for details."
+            echo "❌ Deployment failed. Check logs."
         }
     }
 }
