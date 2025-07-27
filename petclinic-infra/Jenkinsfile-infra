@@ -74,12 +74,20 @@ pipeline {
                             echo "📂 Showing inventory:"
                             cat inventory/hosts.ini
 
+                            # Copy private key to a stable location
+                            cp $SSH_KEY ./jenkins-key.pem
+                            chmod 400 ./jenkins-key.pem
+
                             echo "📡 Starting SSH agent and adding key"
                             eval "$(ssh-agent -s)"
-                            ssh-add $SSH_KEY
+                            ssh-add ./jenkins-key.pem
+
+                            # Re-generate inventory to reference stable local key
+                            chmod +x generate_inventory.sh
+                            ./generate_inventory.sh ./jenkins-key.pem
 
                             echo "📡 Running Ansible playbook"
-                            ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY --forks 1
+                            ansible-playbook -i inventory/hosts.ini site.yml --private-key ./jenkins-key.pem --forks 1
                         '''
                     }
                 }
