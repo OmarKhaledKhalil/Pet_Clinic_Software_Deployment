@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Paths
+# Usage: ./generate_inventory.sh /path/to/temp-ssh-key
+
 TF_DIR=../terraform
 INVENTORY_DIR=./inventory
-KEY_PATH=$1   # Get this from the pipeline call ($SSH_KEY)
+KEY_PATH=$1   # Gets passed as $SSH_KEY from Jenkins
 
 # Fetch Terraform outputs
 BASTION_IP=$(cd "$TF_DIR" && terraform output -raw bastion_public_ip)
@@ -28,4 +29,4 @@ done
 echo "" >> "$HOSTS_FILE"
 echo "[all:vars]" >> "$HOSTS_FILE"
 echo "ansible_user=ec2-user" >> "$HOSTS_FILE"
-# REMOVE this line: ansible_ssh_private_key_file
+# DO NOT include ansible_ssh_private_key_file! You're passing the key via --private-key in ansible-playbook
