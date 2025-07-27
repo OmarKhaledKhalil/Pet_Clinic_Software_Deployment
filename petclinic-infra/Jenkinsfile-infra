@@ -8,14 +8,13 @@ pipeline {
     }
 
     stages {
-        stage('📥 Checkout Code') {
+        stage('Checkout Code') {
             steps {
-                echo "Checking out code..."
                 git url: 'https://github.com/OmarKhaledKhalil/Pet_Clinic_Software_Deployment.git', branch: 'master'
             }
         }
 
-        stage('🔧 Terraform Init, Plan & Apply') {
+        stage('Terraform Init, Plan & Apply') {
             steps {
                 dir("${TF_DIR}") {
                     withCredentials([
@@ -24,34 +23,40 @@ pipeline {
                         string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
                     ]) {
                         sh '''
-                            echo "🔐 Setting AWS credentials"
+                            echo "🔐 Exporting AWS credentials"
                             export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
                             export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
                             export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN
 
+                            echo "🚀 Running Terraform with Jenkins IP: ${JENKINS_IP}"
                             terraform init
-                            terraform plan -var="key_pair=jenkins-key" -var="jenkins_host_ip=${JENKINS_IP}" -var="ci_host_ip=${JENKINS_IP}"
-                            terraform apply -auto-approve -var="key_pair=jenkins-key" -var="jenkins_host_ip=${JENKINS_IP}" -var="ci_host_ip=${JENKINS_IP}"
+                            terraform plan \
+                                -var="key_pair=jenkins-key" \
+                                -var="jenkins_host_ip=${JENKINS_IP}" \
+                                -var="ci_host_ip=${JENKINS_IP}"
+                            terraform apply -auto-approve \
+                                -var="key_pair=jenkins-key" \
+                                -var="jenkins_host_ip=${JENKINS_IP}" \
+                                -var="ci_host_ip=${JENKINS_IP}"
                         '''
                     }
                 }
             }
         }
 
-        stage('⏳ Wait for EC2 Initialization') {
+        stage('Wait for EC2 Boot') {
             steps {
-                echo "Waiting 100 seconds for EC2 instances to initialize..."
+                echo "⏳ Waiting 100 seconds for EC2 instances to boot..."
                 sleep time: 100, unit: 'SECONDS'
             }
         }
 
-        stage('📝 Generate Ansible Inventory') {
+        stage('Generate Ansible Inventory') {
             steps {
                 dir("${ANSIBLE_DIR}") {
-                    withCredentials([
-                        sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
-                    ]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         sh '''
+                            echo "🔧 Generating inventory"
                             chmod 400 $SSH_KEY
                             chmod +x generate_inventory.sh
                             ./generate_inventory.sh $SSH_KEY
@@ -61,47 +66,15 @@ pipeline {
             }
         }
 
-        stage('📤 Copy SSH Key to Bastion') {
+        stage('Run Ansible Playbook') {
             steps {
                 dir("${ANSIBLE_DIR}") {
-                    withCredentials([
-                        sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
-                    ]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         sh '''
-                            BASTION_IP=$(grep -A1 "\\[bastion\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
-                            echo "📤 Copying SSH key to bastion ($BASTION_IP)..."
-                            scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i $SSH_KEY $SSH_KEY ec2-user@$BASTION_IP:/home/ec2-user/jenkins-key.pem
-                            ssh -i $SSH_KEY ec2-user@$BASTION_IP "chmod 400 /home/ec2-user/jenkins-key.pem"
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('🚀 Run Ansible Playbook') {
-            steps {
-                dir("${ANSIBLE_DIR}") {
-                    withCredentials([
-                        sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
-                    ]) {
-                        sh '''
-                            echo "📂 Inventory:"
+                            echo "📂 Showing inventory:"
                             cat inventory/hosts.ini
 
-                            MASTER_IP=$(grep -A1 "\\[master\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
-                            BASTION_IP=$(grep -A1 "\\[bastion\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
-
-                            echo "🧹 Cleaning known_hosts"
-                            ssh-keygen -R $MASTER_IP || true
-                            ssh-keygen -R $BASTION_IP || true
-
-                            echo "🔌 Testing SSH via bastion"
-                            ssh -A -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@$MASTER_IP 'echo "✅ Connected to master"'
-
-                            echo "📡 Ansible ping check"
-                            ansible -i inventory/hosts.ini all -m ping --private-key $SSH_KEY
-
-                            echo "🚀 Running playbook"
+                            echo "📡 Running Ansible playbook"
                             ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
                         '''
                     }
@@ -112,10 +85,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment successful!"
+            echo "✅ Infrastructure and Kubernetes setup completed successfully."
         }
         failure {
-            echo "❌ Deployment failed. Check logs."
+            echo "❌ Pipeline failed. Check logs for details."
         }
     }
 }
