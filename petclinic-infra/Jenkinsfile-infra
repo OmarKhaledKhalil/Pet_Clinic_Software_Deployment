@@ -89,7 +89,8 @@ pipeline {
 
                     echo "🔌 Testing raw SSH connectivity to master through bastion..."
                     MASTER_IP=$(grep -A1 "\\[master\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
-                    BASTION_IP=$(echo "$MASTER_IP" | grep -oP "(?<=@).+?(?=\\s)")
+                    # ✅ Extract the bastion public IP directly from the inventory file
+                    BASTION_IP=$(grep -A1 "\[master\]" inventory/hosts.ini | tail -n1 | grep -oP '@\K[^ ]+')
                     ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo "✅ SSH to master successful"'
 
                     echo "📡 Testing Ansible connection with ping module..."
