@@ -19,20 +19,21 @@ echo "$WORKER_PRIVATE_IPS"
 echo "📁 Creating inventory directory..."
 mkdir -p inventory
 
-echo "📝 Writing master node to inventory..."
+echo "📝 Writing to inventory..."
 cat > "$INVENTORY_FILE" <<EOF
+[bastion]
+$BASTION_PUBLIC_IP
+
 [master]
 $MASTER_PRIVATE_IP ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'
 
 [worker]
 EOF
 
-echo "📝 Adding worker nodes to inventory..."
 for ip in $WORKER_PRIVATE_IPS; do
   echo "$ip ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'" >> "$INVENTORY_FILE"
 done
 
-echo "📝 Writing global vars..."
 cat >> "$INVENTORY_FILE" <<EOF
 
 [all:vars]
@@ -42,5 +43,5 @@ EOF
 
 echo "📄 Final generated inventory:"
 cat "$INVENTORY_FILE"
-
 echo "✅ Inventory generation completed."
+
