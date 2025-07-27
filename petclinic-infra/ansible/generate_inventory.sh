@@ -3,7 +3,7 @@
 # Paths
 TF_DIR=../terraform
 INVENTORY_DIR=./inventory
-KEY_PATH=$1   # 👈 Get this from the pipeline call (should be $SSH_KEY)
+KEY_PATH=$1   # Get this from the pipeline call ($SSH_KEY)
 
 # Fetch Terraform outputs
 BASTION_IP=$(cd "$TF_DIR" && terraform output -raw bastion_public_ip)
@@ -17,15 +17,15 @@ mkdir -p "$INVENTORY_DIR"
 HOSTS_FILE="${INVENTORY_DIR}/hosts.ini"
 
 echo "[master]" > "$HOSTS_FILE"
-echo "$MASTER_IP ansible_ssh_common_args='-o ProxyCommand=\"ssh -i $KEY_PATH -W %h:%p ec2-user@$BASTION_IP\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
+echo "$MASTER_IP ansible_ssh_common_args='-o ProxyCommand=\"ssh -W %h:%p ec2-user@$BASTION_IP\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
 
 echo "" >> "$HOSTS_FILE"
 echo "[worker]" >> "$HOSTS_FILE"
 for ip in $WORKER_IPS; do
-  echo "$ip ansible_ssh_common_args='-o ProxyCommand=\"ssh -i $KEY_PATH -W %h:%p ec2-user@$BASTION_IP\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
+  echo "$ip ansible_ssh_common_args='-o ProxyCommand=\"ssh -W %h:%p ec2-user@$BASTION_IP\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
 done
 
 echo "" >> "$HOSTS_FILE"
 echo "[all:vars]" >> "$HOSTS_FILE"
 echo "ansible_user=ec2-user" >> "$HOSTS_FILE"
-echo "ansible_ssh_private_key_file=$KEY_PATH" >> "$HOSTS_FILE"
+# REMOVE this line: ansible_ssh_private_key_file
