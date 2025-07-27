@@ -1,18 +1,19 @@
 #!/bin/bash
-
-# Usage: ./generate_inventory.sh /path/to/temp-ssh-key
+set -e  # Exit on any command failure
 
 TF_DIR=../terraform
 INVENTORY_DIR=./inventory
 KEY_PATH=$1   # Gets passed as $SSH_KEY from Jenkins
 
+# Ensure inventory directory exists and is writable by the user running the script
+mkdir -p "$INVENTORY_DIR"
+# If necessary, fix permissions (only needed if you get permission denied errors)
+# chown $USER:$USER "$INVENTORY_DIR"
+
 # Fetch Terraform outputs
 BASTION_IP=$(cd "$TF_DIR" && terraform output -raw bastion_public_ip)
 MASTER_IP=$(cd "$TF_DIR" && terraform output -raw master_private_ip)
 WORKER_IPS=$(cd "$TF_DIR" && terraform output -json worker_private_ips | jq -r '.[]')
-
-# Create inventory directory
-mkdir -p "$INVENTORY_DIR"
 
 # Create hosts.ini
 HOSTS_FILE="${INVENTORY_DIR}/hosts.ini"
@@ -29,4 +30,3 @@ done
 echo "" >> "$HOSTS_FILE"
 echo "[all:vars]" >> "$HOSTS_FILE"
 echo "ansible_user=ec2-user" >> "$HOSTS_FILE"
-# DO NOT include ansible_ssh_private_key_file! You're passing the key via --private-key in ansible-playbook
