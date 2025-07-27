@@ -83,22 +83,26 @@ pipeline {
                         sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
                     ]) {
                         sh '''
-                            echo "📄 Displaying inventory:"
+                            echo "📂 Showing inventory file:"
                             cat inventory/hosts.ini
 
-                            echo "🔑 Fixing SSH permissions"
+                            echo "🔑 Fixing SSH key permissions"
                             chmod 400 $SSH_KEY
 
-                            echo "🔌 Testing SSH connection to master via bastion..."
                             MASTER_IP=$(grep -A1 "\\[master\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
                             BASTION_IP=$(grep -A1 "\\[bastion\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
 
+                            echo "🧹 Cleaning known_hosts for $MASTER_IP and $BASTION_IP"
+                            ssh-keygen -R $MASTER_IP || true
+                            ssh-keygen -R $BASTION_IP || true
+
+                            echo "🔌 Testing SSH connection to master via bastion ($BASTION_IP → $MASTER_IP)..."
                             ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo "✅ SSH to master successful"'
 
-                            echo "📡 Pinging all nodes with Ansible"
+                            echo "📡 Testing Ansible ping"
                             ansible -i inventory/hosts.ini all -m ping --private-key $SSH_KEY || echo "❌ Ansible ping failed"
 
-                            echo "📜 Running main playbook"
+                            echo "🚀 Running main Ansible playbook..."
                             ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
                         '''
                     }
@@ -116,3 +120,4 @@ pipeline {
         }
     }
 }
+
