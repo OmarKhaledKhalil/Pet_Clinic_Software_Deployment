@@ -8,14 +8,15 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Code') {
+
+        stage('📥 Checkout Code') {
             steps {
-                echo "📥 Checking out code from GitHub"
+                echo "Checking out code from GitHub repository..."
                 git url: 'https://github.com/OmarKhaledKhalil/Pet_Clinic_Software_Deployment.git', branch: 'master'
             }
         }
 
-        stage('Terraform Init, Plan & Apply') {
+        stage('🔧 Terraform Init, Plan & Apply') {
             steps {
                 dir("${TF_DIR}") {
                     withCredentials([
@@ -24,23 +25,21 @@ pipeline {
                         string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
                     ]) {
                         sh '''
-                            echo "🔐 Exporting AWS credentials"
+                            echo "🔐 Setting AWS credentials"
                             export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
                             export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
                             export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN
 
-                            echo "📍 Current Directory: $(pwd)"
-                            echo "🧪 Running terraform init"
+                            echo "📍 Directory: $(pwd)"
                             terraform init
 
-                            echo "📐 Running terraform plan with:"
-                            echo "   - Jenkins IP: ${JENKINS_IP}"
+                            echo "📐 Running Terraform Plan"
                             terraform plan \
                                 -var="key_pair=jenkins-key" \
                                 -var="jenkins_host_ip=${JENKINS_IP}" \
                                 -var="ci_host_ip=${JENKINS_IP}"
 
-                            echo "🚀 Running terraform apply with:"
+                            echo "🚀 Applying Terraform Infrastructure"
                             terraform apply -auto-approve \
                                 -var="key_pair=jenkins-key" \
                                 -var="jenkins_host_ip=${JENKINS_IP}" \
@@ -51,24 +50,25 @@ pipeline {
             }
         }
 
-        stage('Wait for EC2 Boot') {
+        stage('⏳ Wait for EC2 Initialization') {
             steps {
-                echo "⏳ Waiting 100 seconds to allow EC2 instances to initialize..."
+                echo "Waiting 100 seconds for EC2 instances to boot..."
                 sleep time: 100, unit: 'SECONDS'
             }
         }
 
-        stage('Generate Ansible Inventory') {
+        stage('📝 Generate Ansible Inventory') {
             steps {
                 dir("${ANSIBLE_DIR}") {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([
+                        sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
+                    ]) {
                         sh '''
                             echo "🔐 SSH Key Path: $SSH_KEY"
-                            echo "🔧 Preparing inventory generation script"
                             chmod 400 $SSH_KEY
                             chmod +x generate_inventory.sh
 
-                            echo "⚙️ Running generate_inventory.sh..."
+                            echo "⚙️ Generating inventory file..."
                             ./generate_inventory.sh $SSH_KEY
                         '''
                     }
@@ -76,41 +76,43 @@ pipeline {
             }
         }
 
-        stage('Run Ansible Playbook') {
-    steps {
-        dir("${ANSIBLE_DIR}") {
-            withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                sh '''
-                    echo "📂 Showing inventory file:"
-                    cat inventory/hosts.ini
+        stage('🚀 Run Ansible Playbook') {
+            steps {
+                dir("${ANSIBLE_DIR}") {
+                    withCredentials([
+                        sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')
+                    ]) {
+                        sh '''
+                            echo "📄 Displaying inventory:"
+                            cat inventory/hosts.ini
 
-                    echo "🔐 Fixing SSH key permissions"
-                    chmod 400 $SSH_KEY
+                            echo "🔑 Fixing SSH permissions"
+                            chmod 400 $SSH_KEY
 
-                    echo "🔌 Testing raw SSH connectivity to master through bastion..."
-                    MASTER_IP=$(grep -A1 "\\[master\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
-                    # ✅ Extract the bastion public IP directly from the inventory file
-                    BASTION_IP=$(grep -A1 "\[master\]" inventory/hosts.ini | tail -n1 | grep -oP '@\K[^ ]+')
-                    ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo "✅ SSH to master successful"'
+                            echo "🔌 Testing SSH connection to master via bastion..."
+                            MASTER_IP=$(grep -A1 "\\[master\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
+                            BASTION_IP=$(grep -A1 "\\[bastion\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
 
-                    echo "📡 Testing Ansible connection with ping module..."
-                    ansible -i inventory/hosts.ini all -m ping --private-key $SSH_KEY || echo "❌ Ansible ping failed"
+                            ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo "✅ SSH to master successful"'
 
-                    echo "🚀 Running main Ansible playbook..."
-                    ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
-                '''
+                            echo "📡 Pinging all nodes with Ansible"
+                            ansible -i inventory/hosts.ini all -m ping --private-key $SSH_KEY || echo "❌ Ansible ping failed"
+
+                            echo "📜 Running main playbook"
+                            ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
+                        '''
+                    }
+                }
             }
         }
-    }
-}
     }
 
     post {
         success {
-            echo "✅ All pipeline stages completed successfully."
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo "❌ Pipeline failed. Please check above logs carefully."
+            echo "❌ Pipeline failed. Check logs for details."
         }
     }
 }
