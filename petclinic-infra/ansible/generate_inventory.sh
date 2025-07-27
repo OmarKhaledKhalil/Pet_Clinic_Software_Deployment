@@ -25,19 +25,20 @@ cat > "$INVENTORY_FILE" <<EOF
 $BASTION_PUBLIC_IP
 
 [master]
-$MASTER_PRIVATE_IP ansible_ssh_private_key_file=~/jenkins-key.pem ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'
+$MASTER_PRIVATE_IP ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'
 
 [worker]
 EOF
 
 for ip in $WORKER_PRIVATE_IPS; do
-  echo "$ip ansible_ssh_private_key_file=~/jenkins-key.pem ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'" >> "$INVENTORY_FILE"
+  echo "$ip ansible_ssh_common_args='-o ProxyJump=ec2-user@$BASTION_PUBLIC_IP -o StrictHostKeyChecking=no'" >> "$INVENTORY_FILE"
 done
 
 cat >> "$INVENTORY_FILE" <<EOF
 
 [all:vars]
 ansible_user=ec2-user
+ansible_ssh_private_key_file=$KEY_PATH
 EOF
 
 echo "📄 Final generated inventory:"
