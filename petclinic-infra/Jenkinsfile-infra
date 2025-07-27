@@ -77,20 +77,31 @@ pipeline {
         }
 
         stage('Run Ansible Playbook') {
-            steps {
-                dir("${ANSIBLE_DIR}") {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                        sh '''
-                            echo "📂 Showing generated inventory:"
-                            cat inventory/hosts.ini
+    steps {
+        dir("${ANSIBLE_DIR}") {
+            withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                sh '''
+                    echo "📂 Showing inventory file:"
+                    cat inventory/hosts.ini
 
-                            echo "📡 Executing Ansible Playbook"
-                            ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
-                        '''
-                    }
-                }
+                    echo "🔐 Fixing SSH key permissions"
+                    chmod 400 $SSH_KEY
+
+                    echo "🔌 Testing raw SSH connectivity to master through bastion..."
+                    MASTER_IP=$(grep -A1 "\\[master\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
+                    BASTION_IP=$(echo "$MASTER_IP" | grep -oP "(?<=@).+?(?=\\s)")
+                    ssh -i $SSH_KEY -o ProxyJump=ec2-user@$BASTION_IP -o StrictHostKeyChecking=no ec2-user@$MASTER_IP 'echo "✅ SSH to master successful"'
+
+                    echo "📡 Testing Ansible connection with ping module..."
+                    ansible -i inventory/hosts.ini all -m ping --private-key $SSH_KEY || echo "❌ Ansible ping failed"
+
+                    echo "🚀 Running main Ansible playbook..."
+                    ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
+                '''
             }
         }
+    }
+}
     }
 
     post {
