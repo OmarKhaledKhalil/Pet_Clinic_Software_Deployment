@@ -79,7 +79,7 @@ pipeline {
                             ssh-add $SSH_KEY
 
                             echo "📡 Running Ansible playbook"
-                            ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY
+                            ansible-playbook -i inventory/hosts.ini site.yml --private-key $SSH_KEY --forks 1
                         '''
                     }
                 }
