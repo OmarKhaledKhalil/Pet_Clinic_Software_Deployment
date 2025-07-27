@@ -92,6 +92,12 @@ pipeline {
                             MASTER_IP=$(grep -A1 "\\[master\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
                             BASTION_IP=$(grep -A1 "\\[bastion\\]" inventory/hosts.ini | tail -n1 | awk '{print $1}')
 
+                            echo "🛠️ Preparing SSH environment for Jenkins user"
+                            mkdir -p ~/.ssh
+                            touch ~/.ssh/known_hosts
+                            chmod 700 ~/.ssh
+                            chmod 600 ~/.ssh/known_hosts
+
                             echo "🧹 Cleaning known_hosts for $MASTER_IP and $BASTION_IP"
                             ssh-keygen -R $MASTER_IP || true
                             ssh-keygen -R $BASTION_IP || true
@@ -120,4 +126,3 @@ pipeline {
         }
     }
 }
-
