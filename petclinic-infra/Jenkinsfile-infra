@@ -46,8 +46,8 @@ pipeline {
 
         stage('Wait for EC2 Boot') {
             steps {
-                echo "⏳ Waiting 120 seconds for EC2 instances to boot..."
-                sleep time: 120, unit: 'SECONDS'
+                echo "⏳ Waiting 100 seconds for EC2 instances to boot..."
+                sleep time: 100, unit: 'SECONDS'
             }
         }
 
