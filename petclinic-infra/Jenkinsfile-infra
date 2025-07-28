@@ -57,10 +57,11 @@ pipeline {
                 dir("${ANSIBLE_DIR}") {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         sh '''
-                            chmod 400 "$SSH_KEY"
+                            cp "$SSH_KEY" mykey.pem
+                            chmod 400 mykey.pem
                             chmod +x generate_inventory.sh
-                            ./generate_inventory.sh "$SSH_KEY"
-                             ansible-playbook -i inventory/hosts.ini site.yml --private-key "$SSH_KEY" --forks 1
+                            ./generate_inventory.sh mykey.pem
+                            ansible-playbook -i inventory/hosts.ini site.yml --private-key mykey.pem --forks 1
                         '''
                     }
                 }
