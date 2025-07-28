@@ -58,12 +58,13 @@ pipeline {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         sh '''
                             echo "🔑 Preparing SSH Key"
-                            KEY_PATH="$WORKSPACE/jenkins-key.pem"
+                            mkdir -p tmp_key
+                            KEY_PATH="tmp_key/jenkins-key.pem"
                             cp "$SSH_KEY" "$KEY_PATH"
                             chmod 400 "$KEY_PATH"
                             chmod +x generate_inventory.sh
                             ./generate_inventory.sh "$KEY_PATH"
-                            echo "Generated inventory:"
+                            echo "📄 Generated inventory:"
                             cat inventory/hosts.ini
                         '''
                     }
