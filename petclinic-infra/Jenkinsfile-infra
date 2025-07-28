@@ -61,7 +61,7 @@ pipeline {
                             cp "$SSH_KEY" mykey.pem
                             chmod 400 mykey.pem
                             chmod +x generate_inventory.sh
-                            ./generate_invenchmod -R u+w "$WORKSPACE"tory.sh mykey.pem
+                            ./generate_inventory.sh mykey.pem
                             ansible-playbook -i inventory/hosts.ini site.yml --private-key mykey.pem --forks 1
                         '''
                     }
