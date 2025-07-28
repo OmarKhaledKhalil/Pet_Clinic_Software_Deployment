@@ -52,40 +52,15 @@ pipeline {
             }
         }
 
-        stage('Generate Ansible Inventory') {
+        stage('Generate Ansible Inventory and Run Ansible Playbook') {
             steps {
                 dir("${ANSIBLE_DIR}") {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         sh '''
+                            chmod 400 "$SSH_KEY"
                             chmod +x generate_inventory.sh
-                            ./generate_inventory.sh "$KEY_PATH"
-                            echo "📄 Generated inventory:"
-                            cat inventory/hosts.ini
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Run Ansible Playbook') {
-            steps {
-                dir("${ANSIBLE_DIR}") {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-                        sh '''
-                            KEY_PATH="$WORKSPACE/jenkins-key.pem"
-                            echo "📂 Checking key file and inventory:"
-                            ls -l "$KEY_PATH"
-                            cat inventory/hosts.ini
-
-                            echo "📡 Starting SSH agent and adding key"
-                            eval "$(ssh-agent -s)"
-                            ssh-add "$KEY_PATH"
-
-                            export SSH_AUTH_SOCK=$SSH_AUTH_SOCK
-                            echo "✅ SSH_AUTH_SOCK is: $SSH_AUTH_SOCK"
-
-                            echo "📡 Running Ansible playbook"
-                            ansible-playbook -i inventory/hosts.ini site.yml --private-key "$KEY_PATH" --forks 1
+                            ./generate_inventory.sh "$SSH_KEY"
+                             ansible-playbook -i inventory/hosts.ini site.yml --private-key "$SSH_KEY" --forks 1
                         '''
                     }
                 }
