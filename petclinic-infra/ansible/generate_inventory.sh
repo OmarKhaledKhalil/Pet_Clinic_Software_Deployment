@@ -21,12 +21,12 @@ HOSTS_FILE="${INVENTORY_DIR}/hosts.ini"
 
 {
 echo "[master]"
-echo "$MASTER_IP ansible_ssh_common_args='$SSH_COMMON_ARGS'"
+echo "$MASTER_IP ansible_ssh_common_args=$SSH_COMMON_ARGS"
 
 echo ""
 echo "[worker]"
 for ip in $WORKER_IPS; do
-  echo "$ip ansible_ssh_common_args='$SSH_COMMON_ARGS'"
+  echo "$ip ansible_ssh_common_args=$SSH_COMMON_ARGS"
 done
 
 echo ""
