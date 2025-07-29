@@ -1,27 +1,49 @@
 ---
-- name: Enable bridge networking            # Task to enable bridge networking
-  shell: sysctl net.bridge.bridge-nf-call-iptables=1  # Set sysctl for IPv4 packet filtering
+- name: Initialize Kubernetes Master
+  command: kubeadm init --apiserver-advertise-address=192.168.56.10 --pod-network-cidr=10.244.0.0/16
+  args:
+    creates: /etc/kubernetes/admin.conf
 
-- name: Initialize Kubernetes Master        # Task to set up the Kubernetes Master node
-  command: kubeadm init --pod-network-cidr=10.244.0.0/16  # Initialize master with CIDR for pod network
-  register: kubeadm_init                    # Register result for later use
-  ignore_errors: yes                        # Ignore errors to allow further steps (useful for demos)
+- name: Pause after kubeadm init to wait for control plane components
+  pause:
+    seconds: 20
 
-- name: Set up kubeconfig for root          # Task to configure kubectl for root user
-  shell: |                                  # Create .kube directory and copy config
-    mkdir -p /root/.kube
-    cp -i /etc/kubernetes/admin.conf /root/.kube/config
-    chown $(id -u):$(id -g) /root/.kube/config  # Set ownership to root user
-
-- name: Install Flannel Network Plugin      # Task to deploy Flannel for network overlay
+- name: Set up kube config for root
   shell: |
-    kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml  # Apply Flannel configuration
+    sudo mkdir -p $HOME/.kube
+    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+    sudo chown $(id -u):$(id -g) $HOME/.kube/config
+  
 
-- name: Generate join command               # Task to create a command for joining worker nodes
-  shell: kubeadm token create --print-join-command  # Generate token for joining nodes
-  register: join_command                    # Store the command output
+- name: Install Flannel CNI
+  command: kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: flannel_result
+  until: flannel_result.rc == 0
+  retries: 5
+  delay: 10
 
-- name: Save join command to file           # Task to save the join command for later use
+- name: Wait for kube-flannel pod to be ready
+  shell: |
+    kubectl wait --for=condition=Ready pod -l app=flannel -n kube-flannel --timeout=180s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: wait_result
+  until: wait_result.rc == 0
+  retries: 3
+  delay: 15
+
+- name: Get join command
+  command: kubeadm token create --print-join-command
+  register: join_command
+
+- name: Save join command to file
   copy:
-    content: "{{ join_command.stdout }}"    # Write the command to a file
-    dest: /tmp/kube_join.sh                 # Destination file path
+    content: "{{ join_command.stdout }}"
+    dest: /join.sh
+    mode: '0755'
+
+- name: Output join command for debug
+  debug:
+    msg: "Join command: {{ join_command.stdout }}"
