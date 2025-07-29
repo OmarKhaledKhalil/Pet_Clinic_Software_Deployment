@@ -23,13 +23,13 @@ EOF
 echo "Copying repo data to master and workers..."
 for ip in "$MASTER_IP" "${WORKER_IPS[@]}"; do
   ssh -o StrictHostKeyChecking=no -i "$KEY_PATH" ec2-user@"$BASTION_IP" \
-    "scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -r ~/amzn2-repos ec2-user@$ip:/tmp/"
+    "scp -o StrictHostKeyChecking=no -i "$KEY_PATH" -r ~/amzn2-repos ec2-user@$ip:/tmp/"
 done
 
 echo "Updating YUM cache on master and workers..."
 for ip in "$MASTER_IP" "${WORKER_IPS[@]}"; do
   ssh -o StrictHostKeyChecking=no -i "$KEY_PATH" ec2-user@"$BASTION_IP" \
-    "ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ec2-user@$ip 'sudo cp -r /tmp/amzn2-repos/yum.repos.d /etc/ && sudo cp -r /tmp/amzn2-repos/yum /var/cache/ && sudo yum clean all && sudo yum makecache'"
+    "ssh -o StrictHostKeyChecking=no -i "$KEY_PATH" ec2-user@$ip 'sudo cp -r /tmp/amzn2-repos/yum.repos.d /etc/ && sudo cp -r /tmp/amzn2-repos/yum /var/cache/ && sudo yum clean all && sudo yum makecache'"
 done
 
 echo "Repo workaround completed successfully!"
