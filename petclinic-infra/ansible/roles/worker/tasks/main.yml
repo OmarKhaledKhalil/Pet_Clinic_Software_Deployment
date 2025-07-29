@@ -7,7 +7,7 @@
 - name: Write join script to worker node
   copy:
     content: "{{ join_script.stdout }}"
-    dest: /tmp/join.sh
+    dest: /join.sh
     mode: '0700'
 
 - name: Pause before running join to ensure master is stable
