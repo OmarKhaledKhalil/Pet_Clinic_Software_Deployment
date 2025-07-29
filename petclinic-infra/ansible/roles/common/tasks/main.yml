@@ -45,7 +45,7 @@
 
 - name: Add Docker CE repository (for containerd)
   get_url:
-    url: https://download.docker.com/linux/centos/docker-ce.repo
+    url: https://download.docker.com/linux/centos/7/x86_64/stable
     dest: /etc/yum.repos.d/docker-ce.repo
 
 - name: Install containerd runtime
