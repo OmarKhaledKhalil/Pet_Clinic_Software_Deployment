@@ -4,7 +4,7 @@ pipeline {
     environment {
         TF_DIR = "petclinic-infra/terraform"
         ANSIBLE_DIR = "petclinic-infra/ansible"
-        JENKINS_IP = "147.161.244.251"
+        JENKINS_IP = "147.161.245.100"
     }
 
     stages {
