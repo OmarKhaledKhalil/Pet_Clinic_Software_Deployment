@@ -1,80 +1,105 @@
 ---
+- name: Disable SELinux enforcement
+  command: setenforce 0
+  ignore_errors: yes
+
+- name: Permanently disable SELinux in config file
+  replace:
+    path: /etc/selinux/config
+    regexp: '^SELINUX=enforcing'
+    replace: 'SELINUX=disabled'
+
 - name: Disable swap
   command: swapoff -a
 
-- name: Ensure swap is disabled in fstab
+- name: Comment out swap line in /etc/fstab
   replace:
     path: /etc/fstab
-    regexp: '^\s*(.+?)\s+swap\s'
-    replace: '# \1 swap '
+    regexp: '^([^#].*swap.*)$'
+    replace: '# \1'
 
-- name: Install libselinux Python binding (only RHEL excluding Amazon Linux)
-  yum:
-    name: libselinux-python
-    state: present
-  when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon"
+- name: Load br_netfilter module
+  shell: |
+    modprobe br_netfilter
+    echo 'br_netfilter' > /etc/modules-load.d/k8s.conf
 
-- name: Disable SELinux (RHEL family except Amazon Linux)
-  selinux:
-    state: disabled
-  when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon"
-
-- name: Disable SELinux by editing config file (Amazon Linux and others)
-  lineinfile:
-    path: /etc/selinux/config
-    regexp: '^SELINUX='
-    line: 'SELINUX=disabled'
-  become: yes
-  when: ansible_distribution == "Amazon"
-
-- name: Disable SELinux immediately (Amazon Linux)
-  command: setenforce 0
-  ignore_errors: yes
-  when: ansible_distribution == "Amazon" and ansible_selinux.status == "enabled"
-
-- name: Ensure firewalld is stopped and disabled (only if installed)
-  service:
-    name: firewalld
-    state: stopped
-    enabled: no
-  ignore_errors: yes
-
-- name: Load necessary kernel modules
-  modprobe:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - overlay
-    - br_netfilter
-
-- name: Configure sysctl parameters
+- name: Set sysctl params for Kubernetes
   copy:
-    dest: /etc/sysctl.d/kubernetes.conf
+    dest: /etc/sysctl.d/k8s.conf
     content: |
       net.bridge.bridge-nf-call-ip6tables = 1
       net.bridge.bridge-nf-call-iptables = 1
       net.ipv4.ip_forward = 1
 
-- name: Apply sysctl parameters
+- name: Apply sysctl params
   command: sysctl --system
 
-- name: Install essential packages (Amazon Linux with repo workaround)
-  yum:
+- name: Install base dependencies
+  dnf:
     name:
+      - yum-utils
+      - device-mapper-persistent-data
+      - lvm2
       - curl
-      - wget
-      - vim
-      - git
-      - net-tools
-      - unzip
-      - tar
-      - containerd
     state: present
-    disable_gpg_check: yes
-    skip_broken: yes
+
+- name: Add Docker CE repository (for containerd)
+  get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+
+- name: Install containerd runtime
+  dnf:
+    name: containerd.io
+    state: present
+
+- name: Create default containerd config
+  shell: |
+    mkdir -p /etc/containerd
+    containerd config default > /etc/containerd/config.toml
+    sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
 
 - name: Enable and start containerd
   systemd:
     name: containerd
     enabled: yes
-    state: started
+    state: restarted
+
+- name: Wait for containerd socket to be ready
+  wait_for:
+    path: /var/run/containerd/containerd.sock
+    state: present
+    timeout: 30
+
+- name: Add Kubernetes repo manually
+  copy:
+    dest: /etc/yum.repos.d/kubernetes.repo
+    content: |
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/repodata/repomd.xml.key
+
+- name: Install Kubernetes components
+  dnf:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+
+- name: Enable and start kubelet
+  systemd:
+    name: kubelet
+    enabled: yes
+    state: restarted
+
+- name: Pause after starting kubelet to allow services to settle
+  pause:
+    seconds: 10
+
+- name: Ensure kubelet logs are clean for debug
+  shell: journalctl --rotate && journalctl --vacuum-time=1s || true
+  ignore_errors: yes
