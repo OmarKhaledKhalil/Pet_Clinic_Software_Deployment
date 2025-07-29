@@ -32,15 +32,12 @@
   ignore_errors: yes
   when: ansible_distribution == "Amazon" and ansible_selinux.status == "enabled"
 
-- name: Gather service facts
-  service_facts:
-
 - name: Ensure firewalld is stopped and disabled (only if installed)
   service:
     name: firewalld
     state: stopped
     enabled: no
-  when: services is defined and "'firewalld.service' in services"
+  ignore_errors: yes
 
 - name: Load necessary kernel modules
   modprobe:
