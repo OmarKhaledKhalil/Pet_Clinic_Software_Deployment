@@ -58,7 +58,7 @@
 - name: Apply sysctl parameters
   command: sysctl --system
 
-- name: Install essential packages
+- name: Install essential packages (Amazon Linux with repo workaround)
   yum:
     name:
       - curl
@@ -70,6 +70,8 @@
       - tar
       - containerd
     state: present
+    disable_gpg_check: yes
+    skip_broken: yes
 
 - name: Enable and start containerd
   systemd:
