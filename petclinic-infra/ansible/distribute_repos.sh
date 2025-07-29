@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
-
+TF_DIR=../terraform
+INVENTORY_DIR=./inventory
 KEY_PATH=$1  # Passed as argument from Jenkins (e.g., ./generate_inventory.sh mykey.pem)
 
 # Fetch Terraform outputs
