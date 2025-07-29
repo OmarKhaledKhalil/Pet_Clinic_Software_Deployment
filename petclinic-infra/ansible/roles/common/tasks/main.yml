@@ -33,7 +33,14 @@
 
 - name: Apply sysctl params
   command: sysctl --system
-
+  
+- name: Ensure Python 3 and DNF bindings are installed
+  raw: |
+    dnf install -y python3 python3-dnf
+  register: python_install
+  changed_when: "'Nothing to do' not in python_install.stdout"
+  ignore_errors: yes
+  
 - name: Install base dependencies
   dnf:
     name:
