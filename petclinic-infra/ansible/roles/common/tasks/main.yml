@@ -42,7 +42,7 @@
   ignore_errors: yes
   
 - name: Install base dependencies
-  dnf:
+  yum:
     name:
       - yum-utils
       - device-mapper-persistent-data
@@ -56,7 +56,7 @@
     dest: /etc/yum.repos.d/docker-ce.repo
 
 - name: Install containerd runtime
-  dnf:
+  yum:
     name: containerd.io
     state: present
 
@@ -90,7 +90,7 @@
       gpgkey=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/repodata/repomd.xml.key
 
 - name: Install Kubernetes components
-  dnf:
+  yum:
     name:
       - kubelet
       - kubeadm
