@@ -8,15 +8,29 @@
     regexp: '^\s*(.+?)\s+swap\s'
     replace: '# \1 swap '
 
-- name: Install libselinux Python binding
+- name: Install libselinux Python binding (only RHEL excluding Amazon Linux)
   yum:
     name: libselinux-python
     state: present
-  when: ansible_os_family == "RedHat"
+  when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon"
 
-- name: Disable SELinux
+- name: Disable SELinux (RHEL family except Amazon Linux)
   selinux:
     state: disabled
+  when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon"
+
+- name: Disable SELinux by editing config file (Amazon Linux and others)
+  lineinfile:
+    path: /etc/selinux/config
+    regexp: '^SELINUX='
+    line: 'SELINUX=disabled'
+  become: yes
+  when: ansible_distribution == "Amazon"
+
+- name: Disable SELinux immediately (Amazon Linux)
+  command: setenforce 0
+  ignore_errors: yes
+  when: ansible_distribution == "Amazon" and ansible_selinux.status == "enabled"
 
 - name: Ensure firewalld is stopped and disabled
   service:
