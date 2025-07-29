@@ -8,6 +8,12 @@
     regexp: '^\s*(.+?)\s+swap\s'
     replace: '# \1 swap '
 
+- name: Install libselinux Python binding
+  yum:
+    name: libselinux-python
+    state: present
+  when: ansible_os_family == "RedHat"
+
 - name: Disable SELinux
   selinux:
     state: disabled
