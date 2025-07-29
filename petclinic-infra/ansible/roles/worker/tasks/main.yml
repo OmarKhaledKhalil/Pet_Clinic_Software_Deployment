@@ -1,14 +1,32 @@
 ---
-- name: Enable containerd
+- name: Get join command from master
+  shell: cat /join.sh
+  register: join_script
+  delegate_to: k8s-master
+
+- name: Write join script to worker node
+  copy:
+    content: "{{ join_script.stdout }}"
+    dest: /tmp/join.sh
+    mode: '0700'
+
+- name: Pause before running join to ensure master is stable
+  pause:
+    seconds: 15
+
+- name: Run the join command with verbosity
+  command: sh /tmp/join.sh
+  register: join_result
+  retries: 3
+  delay: 30
+  until: join_result.rc == 0
+
+- name: Ensure kubelet is active
   systemd:
-    name: containerd
+    name: kubelet
     state: started
     enabled: true
 
-- name: Fetch join command from master
-  command: cat /tmp/kube_join.sh
-  register: join_command
-  delegate_to: master
-
-- name: Join Kubernetes cluster
-  command: "{{ join_command.stdout }}"
+- name: Pause after kubelet start
+  pause:
+    seconds: 10
