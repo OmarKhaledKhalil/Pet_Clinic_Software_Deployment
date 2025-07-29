@@ -3,6 +3,9 @@
 # SSH settings
 ansible_user: ec2-user
 
+ansible_python_interpreter: /usr/bin/python3
+
+
 # Kubernetes configuration
 k8s_version: "1.21.0"
 pod_network_cidr: "10.244.0.0/16"  # Adjust based on the network plugin
