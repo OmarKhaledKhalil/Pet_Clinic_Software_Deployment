@@ -61,9 +61,7 @@ pipeline {
                             cp "$SSH_KEY" mykey.pem
                             chmod 400 mykey.pem
                             chmod +x generate_inventory.sh
-                            chmod +x distribute_repos.sh
                             ./generate_inventory.sh mykey.pem
-                            ./distribute_repos.sh mykey.pem
                             ansible-playbook -i inventory/hosts.ini site.yml --private-key mykey.pem -u ec2-user
                         '''
                     }
