@@ -1,5 +1,5 @@
 provider "aws" {
-  region = var.region
+  region = var.aws_region
 }
 
 # VPC
@@ -24,9 +24,9 @@ resource "aws_internet_gateway" "gw" {
 }
 
 # Public Subnet (for bastion & NAT)
-resource "aws_subnet" "main" {
+resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.subnet_cidr_block
+  cidr_block              = var.public_subnet_cidr_block
   availability_zone       = var.availability_zone
   map_public_ip_on_launch = true
 
@@ -61,7 +61,7 @@ resource "aws_eip" "nat" {
 # NAT Gateway in public subnet
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.main.id
+  subnet_id     = aws_subnet.public.id
 
   tags = {
     Name = "nat-gateway-${var.name_suffix}"
@@ -83,7 +83,7 @@ resource "aws_route_table" "public_rt" {
 }
 
 resource "aws_route_table_association" "public_assoc" {
-  subnet_id      = aws_subnet.main.id
+  subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public_rt.id
 }
 
@@ -109,9 +109,9 @@ resource "aws_route_table_association" "private_assoc" {
 # Bastion Instance (public subnet)
 resource "aws_instance" "bastion" {
   ami                         = var.ami_id
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.main.id
-  key_name                    = var.key_name
+  instance_type               = var.bastion_instance_type
+  subnet_id                   = aws_subnet.public.id
+  key_name                    = var.key_pair
   associate_public_ip_address = true
 
   tags = merge(
@@ -125,9 +125,9 @@ resource "aws_instance" "bastion" {
 # Master Instance (private subnet)
 resource "aws_instance" "master" {
   ami           = var.ami_id
-  instance_type = var.instance_type
+  instance_type = var.master_instance_type
   subnet_id     = aws_subnet.private.id
-  key_name      = var.key_name
+  key_name      = var.key_pair
 
   tags = merge(
     var.common_tags,
@@ -137,31 +137,18 @@ resource "aws_instance" "master" {
   )
 }
 
-# Worker Instance(s) (private subnet)
-resource "aws_instance" "worker1" {
+# Worker Instances (private subnet, dynamic count)
+resource "aws_instance" "worker" {
+  count         = var.worker_count
   ami           = var.ami_id
-  instance_type = var.instance_type
+  instance_type = var.worker_instance_type
   subnet_id     = aws_subnet.private.id
-  key_name      = var.key_name
+  key_name      = var.key_pair
 
   tags = merge(
     var.common_tags,
     {
-      Name = "worker1-${var.name_suffix}"
-    }
-  )
-}
-
-resource "aws_instance" "worker2" {
-  ami           = var.ami_id
-  instance_type = var.instance_type
-  subnet_id     = aws_subnet.private.id
-  key_name      = var.key_name
-
-  tags = merge(
-    var.common_tags,
-    {
-      Name = "worker2-${var.name_suffix}"
+      Name = "worker${count.index + 1}-${var.name_suffix}"
     }
   )
 }
