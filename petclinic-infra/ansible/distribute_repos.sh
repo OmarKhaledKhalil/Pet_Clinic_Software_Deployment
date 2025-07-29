@@ -1,17 +1,13 @@
 #!/bin/bash
 set -e
 
-if [ "$#" -ne 4 ]; then
-  echo "Usage: $0 <SSH_KEY_PATH> <BASTION_IP> <MASTER_IP> <WORKER_IPS(comma-separated)>"
-  exit 1
-fi
+KEY_PATH=$1  # Passed as argument from Jenkins (e.g., ./generate_inventory.sh mykey.pem)
 
-KEY_PATH=$1
-BASTION_IP=$2
-MASTER_IP=$3
-WORKER_IPS_CSV=$4
-
-IFS=',' read -ra WORKER_IPS <<< "$WORKER_IPS_CSV"
+# Fetch Terraform outputs
+echo "🔍 Fetching Terraform outputs..."
+BASTION_IP=$(cd "$TF_DIR" && terraform output -raw bastion_public_ip)
+MASTER_IP=$(cd "$TF_DIR" && terraform output -raw master_private_ip)
+WORKER_IPS=$(cd "$TF_DIR" && terraform output -json worker_private_ips | jq -r '.[]')
 
 echo "Starting repo distribution workaround..."
 
