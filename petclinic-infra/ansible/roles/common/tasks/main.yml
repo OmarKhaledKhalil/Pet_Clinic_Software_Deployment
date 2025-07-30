@@ -34,7 +34,13 @@
 - name: Apply sysctl params
   command: sysctl --system
 
-# ===== Fix: Ensure Python 2 and yum Python bindings present for Ansible yum module =====
+# ===== Remove invalid Docker repo file if present =====
+- name: Remove invalid Docker repo file if any exists
+  file:
+    path: /etc/yum.repos.d/docker-ce.repo
+    state: absent
+
+# ===== Ensure Python 2 and yum Python bindings present for Ansible yum module =====
 - name: Ensure Python 2 and yum Python bindings are installed
   raw: sudo yum install -y python2 python2-rpm
   changed_when: false
