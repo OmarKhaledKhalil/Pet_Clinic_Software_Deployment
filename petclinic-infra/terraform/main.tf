@@ -95,6 +95,15 @@ resource "aws_security_group" "private_sg" {
     protocol    = "tcp"
     cidr_blocks = [var.public_subnet_cidr_block] # Only allows from Bastion in the public subnet
   }
+
+ingress {
+    description      = "Allow Kubernetes API server traffic"
+    from_port        = var.k8s_api_port
+    to_port          = var.k8s_api_port
+    protocol         = "tcp"
+    cidr_blocks      = [var.private_subnet_cidr_block] # Allow access from private subnet (workers & master)
+  }
+
   egress {
     description = "Allow all egress"
     from_port   = 0
