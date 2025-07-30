@@ -5,7 +5,7 @@
     content: |
       [kubernetes]
       name=Kubernetes
-      baseurl=https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_search('^\\d+\\.\\d+') }}/rpm/
+      baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ kube_version.split('.')[0] }}.{{ kube_version.split('.')[1] }}/rpm/"
       enabled=1
       gpgcheck=1
       repo_gpgcheck=1
