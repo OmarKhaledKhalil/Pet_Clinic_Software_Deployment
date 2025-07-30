@@ -2,6 +2,11 @@
 - name: Set timezone
   command: timedatectl set-timezone {{ timezone }}
 
+- name: Remove broken Kubernetes repo if it exists
+  file:
+    path: /etc/yum.repos.d/kubernetes.repo
+    state: absent
+
 - name: Install required packages
   yum:
     name:
