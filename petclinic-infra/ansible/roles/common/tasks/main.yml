@@ -1,11 +1,4 @@
----
-- name: Prepare EC2 instance for Kubernetes
-  hosts: all
-  become: yes
-  vars:
-    disable_selinux: true
 
-  tasks:
     - name: Disable SELinux enforcement
       command: setenforce 0
       ignore_errors: yes
