@@ -60,6 +60,34 @@
       - curl
     state: present
 
+# ===== Install container-selinux required by containerd =====
+- block:
+    - name: Enable epel-release and yum-utils
+      yum:
+        name:
+          - epel-release
+          - yum-utils
+        state: present
+
+    - name: Install container-selinux package
+      yum:
+        name: container-selinux
+        state: present
+      register: selinux_install
+      failed_when: selinux_install is failed and "'No package container-selinux available' not in selinux_install.msg"
+  rescue:
+    - name: Download container-selinux RPM manually (fallback)
+      get_url:
+        url: https://mirror.centos.org/centos/7/extras/x86_64/Packages/container-selinux-2.119.2-1.el7.noarch.rpm
+        dest: /tmp/container-selinux.rpm
+        mode: '0644'
+
+    - name: Install container-selinux RPM manually
+      yum:
+        name: /tmp/container-selinux.rpm
+        state: present
+
+# ===== Add Docker CE repository =====
 - name: Add Docker CE repository (yum_repository module)
   yum_repository:
     name: docker-ce-stable
@@ -69,6 +97,7 @@
     gpgkey: https://download.docker.com/linux/centos/gpg
     enabled: yes
 
+# ===== Install containerd =====
 - name: Install containerd runtime
   yum:
     name: containerd.io
@@ -92,6 +121,7 @@
     state: present
     timeout: 30
 
+# ===== Kubernetes repo and components =====
 - name: Add Kubernetes repo manually
   copy:
     dest: /etc/yum.repos.d/kubernetes.repo
