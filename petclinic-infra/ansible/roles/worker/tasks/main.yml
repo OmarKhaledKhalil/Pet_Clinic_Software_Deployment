@@ -25,12 +25,17 @@
     name: kubelet
     enabled: yes
 
-- name: Copy join script from master
-  fetch:
+- name: Read join script from master
+  slurp:
     src: /tmp/join.sh
-    dest: /tmp/join.sh
-    flat: yes
+  register: join_script
   delegate_to: "{{ groups['master'][0] }}"
+
+- name: Write join script to workers
+  copy:
+    content: "{{ join_script['content'] | b64decode }}"
+    dest: /tmp/join.sh
+    mode: '0700'
 
 - name: Run join command
   command: sh /tmp/join.sh
