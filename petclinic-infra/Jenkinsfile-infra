@@ -62,7 +62,7 @@ pipeline {
                             chmod 400 mykey.pem
                             chmod +x generate_inventory.sh
                             ./generate_inventory.sh mykey.pem
-                            ansible-playbook -i inventory/hosts.ini site.yml --private-key mykey.pem -u ec2-user
+                            ansible-playbook -i inventory/hosts.ini site.yml --private-key mykey.pem -u ec2-user --flush-cache
                         '''
                     }
                 }
