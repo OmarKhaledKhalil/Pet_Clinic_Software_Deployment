@@ -30,7 +30,7 @@
     src: /tmp/join.sh
     dest: /tmp/join.sh
     flat: yes
-  delegate_to: master
+  delegate_to: "{{ groups['master'][0] }}"
 
 - name: Run join command
   command: sh /tmp/join.sh
