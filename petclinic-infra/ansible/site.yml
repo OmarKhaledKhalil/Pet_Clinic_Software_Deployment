@@ -1,18 +1,18 @@
 ---
-- name: Common setup on all nodes              # Playbook for common setup on all nodes
-  hosts: all                                   # Apply to all hosts
-  become: yes                                  # Run tasks with elevated privileges
+- name: Common setup on all nodes
+  hosts: all
+  become: yes
   roles:
-    - common                                   # Apply the 'common' role
+    - common
 
-- name: Kubernetes master setup                # Playbook for setting up Kubernetes master
-  hosts: master                                # Apply to master nodes
-  become: yes                                  # Run tasks with elevated privileges
+- name: Master node setup
+  hosts: master
+  become: yes
   roles:
-    - master                                   # Apply the 'master' role
+    - master
 
-- name: Kubernetes worker setup                # Playbook for setting up Kubernetes workers
-  hosts: worker                                # Apply to worker nodes
-  become: yes                                  # Run tasks with elevated privileges
+- name: Worker node setup
+  hosts: worker
+  become: yes
   roles:
-    - worker                                   # Apply the 'worker' role
+    - worker
