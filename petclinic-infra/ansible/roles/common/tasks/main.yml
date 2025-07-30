@@ -54,10 +54,14 @@
       - curl
     state: present
 
-- name: Add Docker CE repository (for containerd)
-  get_url:
-    url: https://download.docker.com/linux/centos/7/x86_64/stable
-    dest: /etc/yum.repos.d/docker-ce.repo
+- name: Add Docker CE repository (yum_repository module)
+  yum_repository:
+    name: docker-ce-stable
+    description: Docker CE Stable - $basearch
+    baseurl: https://download.docker.com/linux/centos/7/$basearch/stable
+    gpgcheck: yes
+    gpgkey: https://download.docker.com/linux/centos/gpg
+    enabled: yes
 
 - name: Install containerd runtime
   yum:
