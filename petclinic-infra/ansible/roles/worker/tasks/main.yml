@@ -1,14 +1,16 @@
 ---
-- name: Add Kubernetes repo
-  yum_repository:
-    name: kubernetes
-    description: Kubernetes
-    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
-    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg
-    enabled: yes
-    gpgcheck: yes
-    repo_gpgcheck: no
-
+- name: Add Kubernetes YUM repo
+  copy:
+    dest: /etc/yum.repos.d/kubernetes.repo
+    content: |
+      [kubernetes]
+      name=Kubernetes
+      baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ kube_version.split('.')[0] }}.{{ kube_version.split('.')[1] }}/rpm/"
+      enabled=1
+      gpgcheck=1
+      repo_gpgcheck=1
+      gpgkey=https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_search('^\\d+\\.\\d+') }}/rpm/repodata/repomd.xml.key
+      
 - name: Install Kubernetes components
   yum:
     name:
