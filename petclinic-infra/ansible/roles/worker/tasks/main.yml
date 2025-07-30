@@ -31,10 +31,6 @@
   register: join_script
   delegate_to: "{{ groups['master'][0] }}"
 
-- name: Reset node before rejoining cluster
-  command: kubeadm reset -f
-  ignore_errors: yes
-
 - name: Write join script to workers
   copy:
     content: "{{ join_script['content'] | b64decode }}"
