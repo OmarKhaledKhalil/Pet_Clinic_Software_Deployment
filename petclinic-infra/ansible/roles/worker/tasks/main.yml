@@ -1,32 +1,35 @@
 ---
-- name: Get join command from master
-  shell: cat /join.sh
-  register: join_script
-  delegate_to: k8s-master
+- name: Add Kubernetes repo
+  yum_repository:
+    name: kubernetes
+    description: Kubernetes
+    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg
+    enabled: yes
+    gpgcheck: yes
+    repo_gpgcheck: no
 
-- name: Write join script to worker node
-  copy:
-    content: "{{ join_script.stdout }}"
-    dest: /join.sh
-    mode: '0700'
+- name: Install Kubernetes components
+  yum:
+    name:
+      - kubeadm-{{ kube_version }}
+      - kubelet-{{ kube_version }}
+      - kubectl-{{ kube_version }}
+    state: present
+    disable_gpg_check: yes
 
-- name: Pause before running join to ensure master is stable
-  pause:
-    seconds: 15
-
-- name: Run the join command with verbosity
-  command: sh /tmp/join.sh
-  register: join_result
-  retries: 3
-  delay: 30
-  until: join_result.rc == 0
-
-- name: Ensure kubelet is active
+- name: Enable kubelet service
   systemd:
     name: kubelet
-    state: started
-    enabled: true
+    enabled: yes
 
-- name: Pause after kubelet start
-  pause:
-    seconds: 10
+- name: Copy join script from master
+  fetch:
+    src: /tmp/join.sh
+    dest: /tmp/join.sh
+    flat: yes
+  delegate_to: master
+
+- name: Run join command
+  command: sh /tmp/join.sh
+
