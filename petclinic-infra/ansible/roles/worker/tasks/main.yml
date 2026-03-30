@@ -1,41 +1,103 @@
 ---
-- name: Add Kubernetes YUM repo
-  copy:
-    dest: /etc/yum.repos.d/kubernetes.repo
-    content: |
-      [kubernetes]
-      name=Kubernetes
-      baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ kube_version.split('.')[0] }}.{{ kube_version.split('.')[1] }}/rpm/"
-      enabled=1
-      gpgcheck=1
-      repo_gpgcheck=1
-      gpgkey=https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_search('^\\d+\\.\\d+') }}/rpm/repodata/repomd.xml.key
-      
-- name: Install Kubernetes components
-  yum:
-    name:
-      - kubeadm-{{ kube_version }}
-      - kubelet-{{ kube_version }}
-      - kubectl-{{ kube_version }}
-    state: present
-    disable_gpg_check: yes
+# These tasks set up a Kubernetes worker node on an Ubuntu system.
 
-- name: Enable kubelet service
-  systemd:
+# Install and configure container runtime FIRST
+- name: Install additional required packages for Kubernetes
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+
+- name: Install containerd
+  ansible.builtin.apt:
+    name: containerd
+    state: present
+
+- name: Create containerd config directory
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+
+- name: Generate default containerd config
+  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+
+- name: Configure containerd to use systemd cgroup driver
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+
+- name: Restart and enable containerd
+  ansible.builtin.systemd_service:
+    name: containerd
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+
+- name: Wait for containerd to be ready
+  ansible.builtin.wait_for:
+    path: /var/run/containerd/containerd.sock
+    timeout: 30
+
+- name: Add Kubernetes GPG key
+  apt_key:
+    url: "https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_search('^\\d+\\.\\d+') }}/deb/Release.key"
+    state: present
+
+- name: Add Kubernetes APT repository
+  apt_repository:
+    repo: "deb https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_search('^\\d+\\.\\d+') }}/deb/ /"
+    state: present
+    filename: kubernetes
+
+- name: Update apt package index
+  ansible.builtin.apt:
+    update_cache: yes
+
+- name: Install Kubernetes components
+  apt:
+    name:
+      - kubeadm={{ kube_version }}-1.1
+      - kubelet={{ kube_version }}-1.1
+      - kubectl={{ kube_version }}-1.1
+    state: present
+
+- name: Hold Kubernetes packages to prevent unintended upgrades
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubeadm
+    - kubelet
+    - kubectl
+
+- name: Enable and start kubelet service
+  ansible.builtin.systemd_service:
     name: kubelet
     enabled: yes
+    state: started # The kubelet will wait for the join command to get its config
 
-- name: Read join script from master
-  slurp:
+# The following tasks are OS-agnostic and remain the same.
+
+- name: Read join command script from the master node
+  ansible.builtin.slurp:
     src: /tmp/join.sh
   register: join_script
-  delegate_to: "{{ groups['master'][0] }}"
+  delegate_to: "{{ groups['master'][0] }}" # Assumes your master is in a group named 'master'
 
-- name: Write join script to workers
-  copy:
+- name: Write the join command script to the worker node
+  ansible.builtin.copy:
     content: "{{ join_script['content'] | b64decode }}"
     dest: /tmp/join.sh
     mode: '0700'
 
-- name: Run join command
-  command: sh /tmp/join.sh
+- name: Join the worker node to the Kubernetes cluster
+  ansible.builtin.command: sh /tmp/join.sh
+  args:
+    # This makes the task idempotent. 'kubeadm join' creates this file upon success.
+    creates: /etc/kubernetes/kubelet.conf
