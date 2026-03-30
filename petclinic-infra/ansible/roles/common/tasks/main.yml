@@ -1,23 +1,22 @@
 ---
+
 - name: Set timezone
   command: timedatectl set-timezone {{ timezone }}
 
-- name: Remove broken Kubernetes repo if it exists
-  file:
-    path: /etc/yum.repos.d/kubernetes.repo
-    state: absent
+- name: Update the apt package index
+  apt:
+    update_cache: yes
 
 - name: Install required packages
-  yum:
+  apt:
     name:
       - curl
       - wget
       - vim
       - git
       - net-tools
-      - bind-utils
-      - yum-utils
-      - device-mapper-persistent-data
+      - dnsutils
+      - software-properties-common
       - lvm2
     state: present
 
@@ -31,10 +30,15 @@
     regexp: '^([^#].*swap)'
     replace: '# \1'
 
+- name: Load br_netfilter module
+  shell: echo br_netfilter | sudo tee /etc/modules-load.d/br_netfilter.conf
+  register: br_netfilter_module
+
 - name: Enable br_netfilter module
   modprobe:
     name: br_netfilter
     state: present
+  when: br_netfilter_module.changed
 
 - name: Set sysctl params for Kubernetes
   copy:
