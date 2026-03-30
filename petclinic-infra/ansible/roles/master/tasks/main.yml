@@ -1,29 +1,82 @@
 ---
-- name: Add Kubernetes YUM repo
-  copy:
-    dest: /etc/yum.repos.d/kubernetes.repo
-    content: |
-      [kubernetes]
-      name=Kubernetes
-      baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ kube_version.split('.')[0] }}.{{ kube_version.split('.')[1] }}/rpm/"
-      enabled=1
-      gpgcheck=1
-      repo_gpgcheck=1
-      gpgkey=https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_search('^\\d+\\.\\d+') }}/rpm/repodata/repomd.xml.key
+- name: Install additional required packages for Kubernetes
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+
+- name: Add Kubernetes GPG key
+  apt_key:
+    url: "https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_search('^\\d+\\.\\d+') }}/deb/Release.key"
+    state: present
+
+- name: Add Kubernetes APT repository
+  apt_repository:
+    repo: "deb https://pkgs.k8s.io/core:/stable:/v{{ kube_version | regex_search('^\\d+\\.\\d+') }}/deb/ /"
+    state: present
+    filename: kubernetes
+
+- name: Update apt cache after adding repository
+  apt:
+    update_cache: yes
 
 - name: Install Kubernetes components
-  yum:
+  apt:
     name:
-      - kubeadm-{{ kube_version }}
-      - kubelet-{{ kube_version }}
-      - kubectl-{{ kube_version }}
+      - kubeadm={{ kube_version }}-1.1
+      - kubelet={{ kube_version }}-1.1
+      - kubectl={{ kube_version }}-1.1
     state: present
-    disable_gpg_check: yes
+
+- name: Hold Kubernetes packages from automatic updates
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubeadm
+    - kubelet
+    - kubectl
 
 - name: Enable kubelet service
   systemd:
     name: kubelet
     enabled: yes
+
+- name: Install containerd
+  apt:
+    name: containerd
+    state: present
+
+- name: Create containerd config directory
+  file:
+    path: /etc/containerd
+    state: directory
+
+- name: Generate default containerd config
+  shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+
+- name: Configure containerd to use systemd cgroup driver
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+
+- name: Restart and enable containerd
+  systemd:
+    name: containerd
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+
+- name: Wait for containerd to be ready
+  wait_for:
+    path: /var/run/containerd/containerd.sock
+    timeout: 30
 
 - name: Initialize Kubernetes cluster
   command: kubeadm init --pod-network-cidr=10.244.0.0/16
@@ -31,37 +84,54 @@
   args:
     creates: /etc/kubernetes/admin.conf
 
+- name: Check if join command exists
+  stat:
+    path: /tmp/join.sh
+  register: join_command_file
+
 - name: Save join command
   shell: |
     kubeadm token create --print-join-command > /tmp/join.sh
-  when: kubeadm_init is changed
+    chmod 700 /tmp/join.sh
+  when: kubeadm_init is changed or not join_command_file.stat.exists
 
 - name: Ensure .kube directory exists
   become: yes
-  become_user: ec2-user
+  become_user: ubuntu
   file:
-    path: /home/ec2-user/.kube
+    path: /home/ubuntu/.kube
     state: directory
     mode: '0755'
 
 - name: Check if kube config exists
   become: yes
-  become_user: ec2-user
+  become_user: ubuntu
   stat:
-    path: /home/ec2-user/.kube/config
+    path: /home/ubuntu/.kube/config
   register: kubeconfig
 
-- name: Copy kubeconfig to ec2-user
+- name: Copy kubeconfig to ubuntu user
   become: yes
   when: not kubeconfig.stat.exists
   copy:
     src: /etc/kubernetes/admin.conf
-    dest: /home/ec2-user/.kube/config
+    dest: /home/ubuntu/.kube/config
     remote_src: yes
-    owner: ec2-user
-    group: ec2-user
+    owner: ubuntu
+    group: ubuntu
     mode: '0644'
 
+- name: Remove existing Flannel DaemonSet if exists
+  command: kubectl delete daemonset kube-flannel-ds -n kube-flannel
+  become: yes
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  ignore_errors: yes
+
 - name: Install Flannel CNI plugin
-  become_user: ec2-user
   command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+  become: yes
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
