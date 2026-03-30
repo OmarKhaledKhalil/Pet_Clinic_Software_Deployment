@@ -1,3 +1,25 @@
+# --- ALB Outputs ---
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.app_alb.dns_name
+}
+
+output "alb_arn" {
+  description = "ARN of the Application Load Balancer"
+  value       = aws_lb.app_alb.arn
+}
+
+output "frontend_tg_arn" {
+  description = "ARN of the frontend ALB target group"
+  value       = aws_lb_target_group.frontend_tg.arn
+}
+
+output "backend_tg_arn" {
+  description = "ARN of the backend ALB target group"
+  value       = aws_lb_target_group.backend_tg.arn
+}
+
+# --- VPC/Subnet Outputs ---
 output "vpc_id" {
   description = "The ID of the VPC"
   value       = aws_vpc.main.id
@@ -8,17 +30,17 @@ output "public_subnet_id" {
   value       = aws_subnet.public.id
 }
 
+output "public_subnet_2_id" {
+  description = "The ID of the second public subnet"
+  value       = aws_subnet.public_2.id
+}
+
 output "private_subnet_id" {
   description = "The ID of the private subnet"
   value       = aws_subnet.private.id
 }
 
-# Uncomment and adjust the security group output once you declare a security group resource.
-# output "security_group_id" {
-#   description = "The ID of the Kubernetes security group"
-#   value       = aws_security_group.k8s_sg.id
-# }
-
+# --- EC2 Outputs for Ansible ---
 output "bastion_public_ip" {
   description = "Public IP of the bastion host"
   value       = aws_instance.bastion.public_ip
