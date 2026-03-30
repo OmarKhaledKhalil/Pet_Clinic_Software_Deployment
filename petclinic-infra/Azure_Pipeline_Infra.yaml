@@ -1,0 +1,581 @@
+trigger:
+  - master
+
+variables:
+  - group: AWS_Temporary_Credentials
+  - group: PetClinicInfraVars
+  - group: SONAR_TOKEN
+
+stages:
+
+# -----------------------------------------------------------------------------
+# 1. Checkout
+# -----------------------------------------------------------------------------
+- stage: Checkout
+  displayName: 'Checkout Stage'
+  jobs:
+    - job: Checkout
+      pool:
+        vmImage: 'windows-latest'
+      steps:
+        - checkout: self
+          clean: true
+
+# -----------------------------------------------------------------------------
+# 2. stages:
+#- stage: Build
+#  displayName: 'Build and SonarQube Analysis'
+#  jobs:
+#  - job: BuildAndAnalyze
+#    steps:
+#    - checkout: self
+
+    #  SonarQube
+#    - task: SonarQubePrepare@5
+#     inputs:
+#        SonarQube: 'sonarqube'   #  Service Connection Name
+#        scannerMode: 'CLI'
+#        configMode: 'manual'
+#        cliProjectKey: 'my-project-key'
+#        cliProjectName: 'My Project'
+#        cliSources: '.'
+
+    #Code Build
+#    - task: NodeTool@0
+#      inputs:
+#        versionSpec: '18.x'
+#    - script: |
+#        npm install
+#        npm run build
+#      displayName: 'Install & Build'
+
+#    - task: SonarQubeAnalyze@5
+
+     # Quality Gate
+#    - task: SonarQubePublish@5
+#      inputs:
+#        pollingTimeoutSec: '300'
+
+
+# -----------------------------------------------------------------------------
+
+
+# 3. Terraform
+# -----------------------------------------------------------------------------
+- stage: Terraform
+  displayName: 'Terraform Init, Plan & Apply'
+  dependsOn: Checkout
+  jobs:
+    - job: TerraformJob
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+
+        - bash: |
+            sudo apt-get update -y
+            sudo apt-get install -y unzip wget jq
+            wget https://releases.hashicorp.com/terraform/1.5.6/terraform_1.5.6_linux_amd64.zip
+            unzip terraform_1.5.6_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/
+            terraform version
+          displayName: 'Install Terraform'
+
+        - bash: |
+            set -euxo pipefail
+
+           # AGENT_IP=$(curl -s https://ifconfig.me)
+            echo "→ $AGENT_IP"
+
+            # pass to later stages
+            echo "##vso[task.setvariable variable=TERRAFORM_AGENT_IP;isOutput=true]$AGENT_IP"
+
+            cd $(TF_DIR)
+
+            terraform init -input=false
+
+            terraform plan \
+              -input=false \
+              -var="key_pair=$(KEY_PAIR_NAME)" \
+              -var="external_access_ip=$AGENT_IP"
+
+            terraform apply \
+              -input=false \
+              -auto-approve \
+              -var="key_pair=$(KEY_PAIR_NAME)" \
+              -var="external_access_ip=$AGENT_IP"
+
+            terraform output -json > terraform_outputs.json
+          name: RunTerraform
+          displayName: 'Run Terraform'
+          env:
+            AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+            AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+            AWS_SESSION_TOKEN: $(AWS_SESSION_TOKEN)
+
+        - publish: '$(TF_DIR)'
+          artifact: terraform-config
+          displayName: 'Publish Terraform artifact'
+
+# -----------------------------------------------------------------------------
+# 3. Wait
+# -----------------------------------------------------------------------------
+- stage: WaitForBoot
+  displayName: 'Wait for EC2 Instances to Boot'
+  dependsOn: Terraform
+  jobs:
+    - job: WaitJob
+      pool:
+        vmImage: 'windows-latest'
+      steps:
+        - powershell: |
+            Write-Host "Sleeping 100 seconds…"
+            Start-Sleep -Seconds 100
+          displayName: 'Pause 100s'
+
+# -----------------------------------------------------------------------------
+# 4. Ansible
+# -----------------------------------------------------------------------------
+- stage: Ansible
+  displayName: 'Run Ansible Playbook'
+  dependsOn: WaitForBoot
+  variables:
+    TERRAFORM_AGENT_IP: $[ stageDependencies.Terraform.TerraformJob.outputs['RunTerraform.TERRAFORM_AGENT_IP'] ]
+  jobs:
+    - job: AnsibleJob
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+
+        - bash: |
+            curl https://pyenv.run | bash
+            export PATH="$HOME/.pyenv/bin:$PATH"
+            eval "$(pyenv init --path)"
+            eval "$(pyenv init -)"
+            eval "$(pyenv virtualenv-init -)"
+            pyenv install 3.10.12
+            pyenv global 3.10.12
+          displayName: 'Install Python 3.10.12'
+
+        - bash: |
+            sudo apt-get update -y
+            sudo apt-get install -y unzip wget jq
+            wget https://releases.hashicorp.com/terraform/1.5.6/terraform_1.5.6_linux_amd64.zip
+            unzip terraform_1.5.6_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/
+          displayName: 'Install Terraform+jq (Ansible)'
+
+        - bash: |
+            sudo apt-get update -y
+            sudo apt-get install -y python3-pip
+            pip3 install --upgrade ansible
+          displayName: 'Install Ansible'
+
+        - download: current
+          artifact: terraform-config
+          displayName: 'Download Terraform artifact'
+
+        - checkout: self
+
+        - task: DownloadSecureFile@1
+          name: sshKey
+          displayName: 'Download SSH key'
+          inputs:
+            secureFile: 'jenkins-key.pem'
+
+        - bash: |
+            chmod 400 "$(sshKey.secureFilePath)"
+            echo "KEY_ABS_PATH=$(sshKey.secureFilePath)" > keypath.env
+          displayName: 'Prepare SSH key'
+
+        - bash: |
+            set -euxo pipefail
+            source keypath.env
+
+            CURRENT_IP=$(curl -s https://ifconfig.me)
+
+            if [ "$CURRENT_IP" != "$(TERRAFORM_AGENT_IP)" ]; then
+              echo "Updating security group…"
+              pushd $(TF_DIR)
+              terraform init -input=false
+              terraform apply \
+                -input=false \
+                -auto-approve \
+                -var="key_pair=$(KEY_PAIR_NAME)" \
+                -var="external_access_ip=$CURRENT_IP"
+              popd
+            fi
+
+            ARTIFACT=$(Pipeline.Workspace)/terraform-config/terraform_outputs.json
+
+            BASTION_IP=$(jq -r '.bastion_public_ip.value'  "$ARTIFACT")
+            MASTER_IP=$(jq -r '.master_private_ip.value'   "$ARTIFACT")
+            WORKERS=( $(jq -r '.worker_private_ips.value[]' "$ARTIFACT") )
+
+            
+            mkdir -p petclinic-infra/ansible/inventory
+            cat > petclinic-infra/ansible/inventory/hosts.ini <<EOF
+            [master]
+            ${MASTER_IP} ansible_user=ubuntu ansible_ssh_private_key_file=${KEY_ABS_PATH} ansible_ssh_common_args='-o ProxyCommand="ssh -i ${KEY_ABS_PATH} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@${BASTION_IP}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+            [worker]
+            EOF
+
+            for ip in "${WORKERS[@]}"; do
+            echo "${ip} ansible_user=ubuntu ansible_ssh_private_key_file=${KEY_ABS_PATH} ansible_ssh_common_args='-o ProxyCommand=\"ssh -i ${KEY_ABS_PATH} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@${BASTION_IP}\" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'" >> petclinic-infra/ansible/inventory/hosts.ini
+            done
+
+            cd petclinic-infra/ansible
+
+            ansible-playbook \
+              -i inventory/hosts.ini \
+              site.yml \
+              --private-key "$KEY_ABS_PATH" \
+              -u ubuntu --flush-cache
+          displayName: 'Run Ansible Playbook'
+          env:
+            AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+            AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+            AWS_SESSION_TOKEN: $(AWS_SESSION_TOKEN)
+
+# 5. Deploy and Test Kubernetes Environments (Test, Dev, Prod)
+# -----------------------------------------------------------------------------
+- stage: DeployKubernetesEnvironments
+  displayName: 'Deploy and Test Kubernetes Environments'
+  dependsOn: Ansible
+  variables:
+    TERRAFORM_AGENT_IP: $[ stageDependencies.Terraform.TerraformJob.outputs['RunTerraform.TERRAFORM_AGENT_IP'] ]
+  jobs:
+    - job: KubernetesDeploymentJob
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+
+        - checkout: self
+          displayName: 'Checkout source code'
+
+        - bash: |
+            echo "Installing dependencies..."
+            sudo apt-get update -y
+            sudo apt-get install -y unzip wget jq curl
+
+            # Install Terraform
+            wget https://releases.hashicorp.com/terraform/1.5.6/terraform_1.5.6_linux_amd64.zip
+            unzip terraform_1.5.6_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/
+            terraform version
+          displayName: 'Install Dependencies + Terraform'
+
+        - download: current
+          artifact: terraform-config
+          displayName: 'Download Terraform artifact'
+
+        - task: DownloadSecureFile@1
+          name: sshKey
+          inputs:
+            secureFile: 'jenkins-key.pem'
+
+        - bash: |
+            chmod 400 "$(sshKey.secureFilePath)"
+            echo "KEY_ABS_PATH=$(sshKey.secureFilePath)" > keypath.env
+          displayName: 'Prepare SSH key'
+
+        - bash: |
+            set -euxo pipefail
+            source keypath.env
+
+            CURRENT_IP=$(curl -s https://ifconfig.me)
+            echo "Current agent IP: $CURRENT_IP"
+            echo "Terraform SG IP: $(TERRAFORM_AGENT_IP)"
+
+            if [ "$CURRENT_IP" != "$(TERRAFORM_AGENT_IP)" ]; then
+              echo "🔧 IP changed, updating SG..."
+              pushd $(TF_DIR)
+              terraform init -input=false
+              terraform apply -input=false -auto-approve \
+                -var="key_pair=$(KEY_PAIR_NAME)" \
+                -var="external_access_ip=$CURRENT_IP"
+              popd
+            else
+              echo "✅ IP unchanged, no SG update needed."
+            fi
+
+            ARTIFACT=$(Pipeline.Workspace)/terraform-config/terraform_outputs.json
+            MASTER_IP=$(jq -r '.master_private_ip.value' "$ARTIFACT")
+            BASTION_IP=$(jq -r '.bastion_public_ip.value' "$ARTIFACT")
+
+            echo "##vso[task.setvariable variable=MASTER_IP]$MASTER_IP"
+            echo "##vso[task.setvariable variable=BASTION_IP]$BASTION_IP"
+          displayName: 'Check Agent IP & Extract Cluster Info'
+          env:
+            AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+            AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+            AWS_SESSION_TOKEN: $(AWS_SESSION_TOKEN)
+
+        - bash: |
+            set -euxo pipefail
+            source keypath.env
+
+            echo "📦 Uploading all Kubernetes manifests..."
+
+            # Check if k8s-manifests directory exists
+            if [ ! -d "petclinic-infra/k8s-manifests/" ]; then
+              echo "❌ ERROR: Directory k8s-manifests/ not found!"
+              ls -la
+              exit 1
+            fi
+
+            # Create directory on master node
+            ssh -i "$KEY_ABS_PATH" \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ProxyCommand="ssh -i $KEY_ABS_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$(BASTION_IP)" \
+              ubuntu@$(MASTER_IP) "rm -rf ~/k8s-manifests && mkdir -p ~/k8s-manifests"
+
+            # Upload all manifests (test, dev, prod)
+            scp -i "$KEY_ABS_PATH" \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ProxyCommand="ssh -i $KEY_ABS_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$(BASTION_IP)" \
+              -r petclinic-infra/k8s-manifests/* ubuntu@$(MASTER_IP):~/k8s-manifests/
+
+            echo "✅ All manifests uploaded successfully!"
+          displayName: 'Upload Kubernetes Manifests'
+
+        - bash: |
+            set -euxo pipefail
+            source keypath.env
+
+            echo "🚀 Deploying to TEST Environment..."
+
+            ssh -i "$KEY_ABS_PATH" \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ProxyCommand="ssh -i $KEY_ABS_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$(BASTION_IP)" \
+              ubuntu@$(MASTER_IP) << 'EOF'
+            echo "🚀 Creating TEST namespace..."
+            kubectl create namespace test --dry-run=client -o yaml | kubectl apply -f -
+            pwd
+
+            echo "📋 Applying TEST manifests..."
+            if [ -d ~/k8s-manifests/test/ ]; then
+
+              pwd 
+              kubectl apply -f ~/k8s-manifests/test/ -n test
+              
+              echo "⏳ Waiting for TEST deployments..."
+              kubectl rollout status deployment/petclinic-backend -n test --timeout=300s || exit 1
+              kubectl rollout status deployment/petclinic-frontend -n test --timeout=300s || exit 1
+              kubectl rollout status deployment/petclinic-mongo -n test --timeout=300s || exit 1
+              kubectl rollout status deployment/memcache -n test --timeout=300s || exit 1
+              kubectl rollout status deployment/rabbitmq -n test --timeout=300s || exit 1
+              
+              echo "✅ TEST deployment complete!"
+              kubectl get all -n test
+            else
+              echo "❌ TEST manifests not found!"
+              exit 1
+            fi
+            EOF
+          displayName: 'Deploy TEST Environment'
+
+        - bash: |
+            set -euxo pipefail
+            source keypath.env
+
+            echo "🚀 Deploying to DEV Environment..."
+
+            ssh -i "$KEY_ABS_PATH" \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ProxyCommand="ssh -i $KEY_ABS_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$(BASTION_IP)" \
+              ubuntu@$(MASTER_IP) << 'EOF'
+            echo "🚀 Creating DEV namespace..."
+            kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
+
+            echo "📋 Applying DEV manifests..."
+            if [ -d ~/k8s-manifests/dev/ ]; then
+              kubectl apply -f ~/k8s-manifests/dev/ -n dev
+              
+              echo "⏳ Waiting for DEV deployments..."
+              kubectl rollout status deployment/petclinic-backend -n dev --timeout=300s || exit 1
+              kubectl rollout status deployment/petclinic-frontend -n dev --timeout=300s || exit 1
+              kubectl rollout status deployment/petclinic-mongo -n dev --timeout=300s || exit 1
+              kubectl rollout status deployment/memcache -n dev --timeout=300s || exit 1
+              kubectl rollout status deployment/rabbitmq -n dev --timeout=300s || exit 1
+              
+              echo "✅ DEV deployment complete!"
+              kubectl get all -n dev
+            else
+              echo "❌ DEV manifests not found!"
+              exit 1
+            fi
+            EOF
+          displayName: 'Deploy DEV Environment'
+
+        - bash: |
+            set -euxo pipefail
+            source keypath.env
+
+            echo "🚀 Deploying to PROD Environment..."
+
+            ssh -i "$KEY_ABS_PATH" \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ProxyCommand="ssh -i $KEY_ABS_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$(BASTION_IP)" \
+              ubuntu@$(MASTER_IP) << 'EOF'
+            echo "🚀 Creating PROD namespace..."
+            kubectl create namespace prod --dry-run=client -o yaml | kubectl apply -f -
+
+            echo "📋 Applying PROD manifests..."
+            if [ -d ~/k8s-manifests/prod/ ]; then
+              kubectl apply -f ~/k8s-manifests/prod/ -n prod
+              
+              echo "⏳ Waiting for PROD deployments..."
+              kubectl rollout status deployment/petclinic-backend -n prod --timeout=300s || exit 1
+              kubectl rollout status deployment/petclinic-frontend -n prod --timeout=300s || exit 1
+              kubectl rollout status deployment/petclinic-mongo -n prod --timeout=300s || exit 1
+              kubectl rollout status deployment/memcache -n prod --timeout=300s || exit 1
+              kubectl rollout status deployment/rabbitmq -n prod --timeout=300s || exit 1
+      
+              
+              echo "✅ PROD deployment complete!"
+              kubectl get all -n prod
+            else
+              echo "❌ PROD manifests not found!"
+              exit 1
+            fi
+            EOF
+          displayName: 'Deploy PROD Environment'
+
+        - bash: |
+            set -euxo pipefail
+            source keypath.env
+
+            echo "🧪 Running Environment Tests..."
+
+            ssh -i "$KEY_ABS_PATH" \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ProxyCommand="ssh -i $KEY_ABS_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$(BASTION_IP)" \
+              ubuntu@$(MASTER_IP) << 'EOF'
+            
+            echo "=== TESTING ALL ENVIRONMENTS ==="
+            
+            # Function to test an environment
+            test_environment() {
+              local env=$1
+              local nodeport=$2
+              
+              echo "🧪 Testing $env environment (NodePort: $nodeport)..."
+              
+              # Test backend service
+              echo "Testing backend service in $env..."
+              kubectl run test-backend-$env --image=curlimages/curl --rm -it --restart=Never -n $env \
+                --command -- curl -s --connect-timeout 10 http://petclinic-backend:5000/ || echo "Backend test failed for $env"
+              
+              # Test frontend service
+              echo "Testing frontend service in $env..."
+              kubectl run test-frontend-$env --image=curlimages/curl --rm -it --restart=Never -n $env \
+                --command -- curl -s --connect-timeout 10 http://app-service/ || echo "Frontend test failed for $env"
+              
+              # Check pod status
+              echo "Pod status for $env:"
+              kubectl get pods -n $env
+              
+              # Check service endpoints
+              echo "Service endpoints for $env:"
+              kubectl get svc,endpoints -n $env
+              
+              echo "✅ $env environment test completed!"
+              echo ""
+            }
+            
+            # Test all environments
+            test_environment "test" "30080"
+            test_environment "dev" "30081" 
+            test_environment "prod" "30082"
+            
+            echo "🎯 All environment tests completed!"
+            EOF
+          displayName: 'Test All Environments'
+
+        - bash: |
+            source keypath.env
+            echo "📊 Generating Deployment Report..."
+
+            ssh -i "$KEY_ABS_PATH" \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ProxyCommand="ssh -i $KEY_ABS_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$(BASTION_IP)" \
+              ubuntu@$(MASTER_IP) << 'EOF'
+            echo "====================================================="
+            echo "=== KUBERNETES ENVIRONMENTS DEPLOYMENT REPORT ====="
+            echo "====================================================="
+            echo "Timestamp: $(date)"
+            echo ""
+            
+            echo "📋 NAMESPACES:"
+            kubectl get namespaces
+            echo ""
+            
+            echo "🧪 TEST ENVIRONMENT (NodePort: 30080):"
+            kubectl get all -n test
+            echo ""
+            
+            echo "🔧 DEV ENVIRONMENT (NodePort: 30081):"
+            kubectl get all -n dev  
+            echo ""
+            
+            echo "🚀 PROD ENVIRONMENT (NodePort: 30082):"
+            kubectl get all -n prod
+            echo ""
+            
+            echo "🌐 EXTERNAL ACCESS:"
+            WORKER_IPS=$(kubectl get nodes -o wide | grep -v master | awk 'NR>1{print $6}')
+            for ip in $WORKER_IPS; do
+              echo "  TEST:  http://$ip:30080"
+              echo "  DEV:   http://$ip:30081"
+              echo "  PROD:  http://$ip:30082"
+            done
+            echo ""
+            
+            echo "📊 CLUSTER OVERVIEW:"
+            kubectl get nodes -o wide
+            kubectl top nodes || echo "Metrics server not available"
+            echo ""
+            
+            echo "✅ ALL ENVIRONMENTS SUCCESSFULLY DEPLOYED!"
+            echo "====================================================="
+            EOF
+          displayName: 'Generate Deployment Report'
+          condition: always()
+
+        - bash: |
+            source keypath.env
+            echo "🔍 Health Check Summary..."
+
+            ssh -i "$KEY_ABS_PATH" \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              -o ProxyCommand="ssh -i $KEY_ABS_PATH -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ubuntu@$(BASTION_IP)" \
+              ubuntu@$(MASTER_IP) << 'EOF'
+            
+            echo "🏥 HEALTH CHECK SUMMARY:"
+            echo "========================"
+            
+            for env in test dev prod; do
+              echo "Environment: $env"
+              echo "  Pods Ready:"
+              kubectl get pods -n $env --no-headers | awk '{ready+=$2~/1\/1|2\/2|3\/3/} END{print "    " ready "/" NR " pods ready"}'
+              
+              echo "  Services:"
+              kubectl get svc -n $env --no-headers | wc -l | awk '{print "    " $1 " services running"}'
+              
+              echo "  Deployments:"
+              kubectl get deploy -n $env --no-headers 2>/dev/null | awk '{ready+=$2==$4} END{if(NR>0) print "    " ready "/" NR " deployments ready"}' 
+              echo ""
+            done
+            
+            echo "🎯 PetClinic Multi-Environment Deployment Complete!"
+            EOF
+          displayName: 'Final Health Check'
+          condition: always()
