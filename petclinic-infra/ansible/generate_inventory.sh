@@ -1,36 +1,28 @@
 #!/bin/bash
-set -e  # Exit on any error
+set -e
 
-# Define paths
-TF_DIR=../terraform
+KEY_PATH=$1
+TF_OUTPUT_JSON=$2
+
 INVENTORY_DIR=./inventory
-KEY_PATH=$1  # Passed as argument from Jenkins (e.g., ./generate_inventory.sh mykey.pem)
-
-# Ensure inventory directory exists
 mkdir -p "$INVENTORY_DIR"
-
-# Fetch Terraform outputs
-echo "🔍 Fetching Terraform outputs..."
-BASTION_IP=$(cd "$TF_DIR" && terraform output -raw bastion_public_ip)
-MASTER_IP=$(cd "$TF_DIR" && terraform output -raw master_private_ip)
-WORKER_IPS=$(cd "$TF_DIR" && terraform output -json worker_private_ips | jq -r '.[]')
-
-# Create hosts.ini
 HOSTS_FILE="${INVENTORY_DIR}/hosts.ini"
-echo "🔧 Generating $HOSTS_FILE..."
 
-# Master section
+echo "Generating Ansible inventory..."
+
+BASTION_IP=$(jq -r .bastion_public_ip.value "$TF_OUTPUT_JSON")
+MASTER_IP=$(jq -r .master_private_ip.value "$TF_OUTPUT_JSON")
+WORKER_IPS=$(jq -r '.worker_private_ips.value[]' "$TF_OUTPUT_JSON")
+
 echo "[master]" > "$HOSTS_FILE"
-echo "${MASTER_IP} ansible_ssh_common_args='-o ProxyCommand=\"ssh -A -i ${KEY_PATH} -W %h:%p ec2-user@${BASTION_IP}\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
+echo "${MASTER_IP} ansible_ssh_common_args='-o ProxyCommand=\"ssh -i ${KEY_PATH} -W %h:%p ec2-user@${BASTION_IP}\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
 
-# Worker section
 echo -e "\n[worker]" >> "$HOSTS_FILE"
 for ip in $WORKER_IPS; do
-  echo "${ip} ansible_ssh_common_args='-o ProxyCommand=\"ssh -A -i ${KEY_PATH} -W %h:%p ec2-user@${BASTION_IP}\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
+  echo "${ip} ansible_ssh_common_args='-o ProxyCommand=\"ssh -i ${KEY_PATH} -W %h:%p ec2-user@${BASTION_IP}\" -o StrictHostKeyChecking=no'" >> "$HOSTS_FILE"
 done
 
-# Global variables section
 echo -e "\n[all:vars]" >> "$HOSTS_FILE"
-echo "ansible_user=ec2-user" >> "$HOSTS_FILE"
+echo "ansible_user=ubuntu" >> "$HOSTS_FILE"
 
-echo "✅ Inventory file generated at $HOSTS_FILE"
+echo "Inventory generated at $HOSTS_FILE"
